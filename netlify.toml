@@ -1,0 +1,26 @@
+[build]
+  command = "npm run build"
+  functions = "netlify/functions"
+  publish = ".next"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[env.production]
+  NODE_ENV = "production"
+
+[context.production]
+  command = "npm run build"
+
+[context.production.environment]
+  NODE_ENV = "production"
