@@ -17,21 +17,31 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, price, description, imageUrl, stock } = body;
+    const { name, price, description, imageData, stock } = body;
 
-    if (!name || !price || !description) {
+    if (!name || price === undefined || !description) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
+    // Convert base64 image to Buffer if provided
+    let imageBuffer = null;
+    if (imageData && typeof imageData === 'string') {
+      try {
+        imageBuffer = Buffer.from(imageData, 'base64');
+      } catch (e) {
+        console.warn('Invalid image data provided');
+      }
+    }
+
     const product = await createProduct(
       name,
-      price,
+      parseFloat(price),
       description,
-      imageUrl || '',
-      stock || 100
+      imageBuffer,
+      parseInt(stock) || 100
     );
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });
