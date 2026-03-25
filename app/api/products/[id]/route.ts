@@ -1,6 +1,5 @@
-import { connectToDatabase, Product } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
+import { getProductById, updateProduct, deleteProduct } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
@@ -8,29 +7,20 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    await connectToDatabase();
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { error: 'Invalid product ID' },
-        { status: 400 }
-      );
-    }
-
-    const product = await Product.findById(id);
+    const product = await getProductById(id);
 
     if (!product) {
       return NextResponse.json(
-        { error: 'Product not found' },
+        { success: false, error: 'Product not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(product);
+    return NextResponse.json({ success: true, data: product });
   } catch (error) {
-    console.error('Failed to fetch product:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to fetch product' },
+      { success: false, error: 'Failed to fetch product' },
       { status: 500 }
     );
   }
@@ -42,33 +32,30 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    await connectToDatabase();
+    const body = await request.json();
+    const { name, price, description, imageUrl, stock } = body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!name || !price || !description) {
       return NextResponse.json(
-        { error: 'Invalid product ID' },
+        { success: false, error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    const body = await request.json();
-    const product = await Product.findByIdAndUpdate(id, body, {
-      new: true,
-      runValidators: true,
-    });
+    const product = await updateProduct(id, name, price, description, imageUrl || '', stock || 100);
 
     if (!product) {
       return NextResponse.json(
-        { error: 'Product not found' },
+        { success: false, error: 'Product not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(product);
+    return NextResponse.json({ success: true, data: product });
   } catch (error) {
-    console.error('Failed to update product:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to update product' },
+      { success: false, error: 'Failed to update product' },
       { status: 500 }
     );
   }
@@ -80,29 +67,20 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await connectToDatabase();
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        { error: 'Invalid product ID' },
-        { status: 400 }
-      );
-    }
-
-    const product = await Product.findByIdAndDelete(id);
+    const product = await deleteProduct(id);
 
     if (!product) {
       return NextResponse.json(
-        { error: 'Product not found' },
+        { success: false, error: 'Product not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ message: 'Product deleted' });
+    return NextResponse.json({ success: true, message: 'Product deleted' });
   } catch (error) {
-    console.error('Failed to delete product:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to delete product' },
+      { success: false, error: 'Failed to delete product' },
       { status: 500 }
     );
   }

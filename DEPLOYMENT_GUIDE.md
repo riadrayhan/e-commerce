@@ -1,245 +1,246 @@
 # DailyMart E-Commerce Deployment Guide
 
-This is a complete e-commerce platform for daily essentials with an admin panel, built with Next.js 16, MongoDB, and deployed on Netlify.
+This is a complete e-commerce platform for daily essentials with an admin panel, built with Next.js 16 and deployed on Vercel with Neon PostgreSQL database.
 
 ## Features
 
-- **Public Website**: Browse and search products, view details, add to cart, guest checkout
-- **Admin Panel**: Secure admin dashboard to manage products (add, edit, delete)
-- **Shopping Cart**: Client-side cart management with localStorage
+- **Public Website**: Browse products, view details, add to cart, guest checkout
+- **Admin Panel**: Secure dashboard to manage products (add, edit, delete, track orders)
+- **Shopping Cart**: Full cart management with checkout
 - **Orders**: Guest checkout with order confirmation and tracking
-- **MongoDB Integration**: Cloud-based database for products and orders
-- **Responsive Design**: Works perfectly on mobile, tablet, and desktop
-- **Modern UI**: Clean, professional design with Tailwind CSS
+- **PostgreSQL Database**: Neon serverless PostgreSQL for data persistence
+- **Responsive Design**: Mobile-first design that works on all devices
+- **Modern UI**: Clean, professional interface with Tailwind CSS
 
 ## Tech Stack
 
 - **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: Node.js API routes (Netlify Serverless Functions)
-- **Database**: MongoDB with Mongoose
-- **Authentication**: JWT-based admin authentication
-- **Hosting**: Netlify (Frontend + Backend)
+- **Backend**: Next.js API Routes (Vercel Functions)
+- **Database**: Neon PostgreSQL (serverless)
+- **Authentication**: JWT-based admin protection
+- **Hosting**: Vercel (Zero-config deployment)
+- **Images**: URL-based image storage (Vercel Blob recommended for production)
 
 ## Prerequisites
 
 - Node.js 18+
-- MongoDB Atlas account (free tier available)
-- Netlify account
-- Git
+- Neon account (free tier available at https://neon.tech)
+- Vercel account (https://vercel.com)
+- Git and GitHub account
 
-## Step 1: MongoDB Setup
+## Step 1: Neon Database Setup
 
-1. Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-2. Create a free account or sign in
-3. Create a new cluster
-4. Go to "Database Access" and create a database user
-5. Go to "Network Access" and add your IP (or 0.0.0.0 for development)
-6. Go to "Clusters" and click "Connect"
-7. Choose "Drivers" and copy the connection string
-8. Replace `<password>` and `<username>` with your credentials
-9. Save this URL - you'll need it for environment variables
+### 1.1 Create a Neon Account
 
-Example: `mongodb+srv://myusername:mypassword@cluster0.abcde.mongodb.net/dailymart?retryWrites=true&w=majority`
+1. Go to [Neon Console](https://console.neon.tech)
+2. Sign up with GitHub, Google, or email
+3. Create a new project (default settings are fine)
+
+### 1.2 Get Your Connection String
+
+1. In the Neon console, go to "Connection Details" in the right panel
+2. Copy the "Connection string" (it will look like: `postgresql://user:password@...`)
+3. Save this URL safely - you'll need it for environment variables
+
+### 1.3 Create Tables (IMPORTANT!)
+
+1. In the Neon console, click "SQL Editor" in the left sidebar
+2. Copy and paste the entire content from `/scripts/init-db.sql`
+3. Click "Run" to execute the SQL
+
+Your database is now ready!
 
 ## Step 2: Local Development Setup
 
-1. Clone or download this repository
-2. Install dependencies:
+### 2.1 Install Dependencies
+
 ```bash
-npm install
+pnpm install
 ```
 
-3. Create a `.env.local` file in the root directory:
-```
-MONGODB_URI=your_mongodb_connection_string_here
-ADMIN_PASSWORD=your_secure_admin_password_here
-JWT_SECRET=your_random_secret_key_here
-NODE_ENV=development
+### 2.2 Create Local Environment File
+
+Create a `.env.local` file in the root directory:
+
+```env
+# Your Neon connection string from Step 1.2
+DATABASE_URL=postgresql://user:password@...
+
+# Admin password (change this!)
+ADMIN_PASSWORD=admin123
+
+# Random secret for JWT (change this to something random!)
+JWT_SECRET=your-random-secret-key-here
 ```
 
-4. Run the development server:
+### 2.3 Run Locally
+
 ```bash
-npm run dev
+pnpm dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+Visit `http://localhost:3000` in your browser.
 
-## Step 3: Testing Locally
+**Test Admin Panel:**
+- Go to `http://localhost:3000/admin/login`
+- Password: `admin123`
+- Add a test product with image URL
 
-### Add Products (Admin Panel)
-1. Go to [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
-2. Enter the admin password you set in `.env.local`
-3. Click "Add Product" and fill in:
-   - Product Name
-   - Price
-   - Description
-   - Image URL (optional, use any publicly available image URL)
-   - Stock
-4. Click "Add Product"
+## Step 3: Deploy to Vercel
 
-### Browse Products
-1. Go to [http://localhost:3000](http://localhost:3000)
-2. You should see the products you added
-3. Click on any product to view details
-4. Click "Add to Cart" to add to cart
-5. Go to checkout to place an order
+### 3.1 Push to GitHub
 
-## Step 4: Deploy to Netlify
-
-### Option A: Using Netlify CLI (Recommended)
-
-1. Install Netlify CLI:
 ```bash
-npm install -g netlify-cli
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/dailymart.git
+git push -u origin main
 ```
 
-2. Login to Netlify:
-```bash
-netlify login
-```
+### 3.2 Deploy on Vercel
 
-3. Deploy:
-```bash
-netlify deploy --prod
-```
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Click "Add New" → "Project"
+3. Select your GitHub repository
+4. Click "Import"
+5. Under "Environment Variables", add:
+   - `DATABASE_URL` = Your Neon connection string
+   - `ADMIN_PASSWORD` = Your secure password
+   - `JWT_SECRET` = Your random secret
+6. Click "Deploy"
 
-### Option B: Using Netlify Web Interface
+Wait for deployment to complete!
 
-1. Push your code to GitHub
-2. Go to [Netlify](https://app.netlify.com)
-3. Click "New site from Git"
-4. Select your repository
-5. Configure build settings:
-   - **Build command**: `npm run build`
-   - **Publish directory**: `.next`
-   - **Functions directory**: `netlify/functions`
+### 3.3 Database Initialization (First Time Only)
 
-6. Set environment variables in Netlify settings:
-   - Go to "Site settings" → "Build & deploy" → "Environment"
-   - Add these variables:
-     - `MONGODB_URI`: Your MongoDB connection string
-     - `ADMIN_PASSWORD`: Your admin password
-     - `JWT_SECRET`: A random secret key
-     - `NODE_ENV`: production
+After deployment, run the database initialization:
 
-7. Deploy!
+1. In the Neon console, go to SQL Editor
+2. Run the SQL from `/scripts/init-db.sql`
+3. Or execute it locally:
+   ```bash
+   psql $DATABASE_URL < scripts/init-db.sql
+   ```
 
-## Step 5: Netlify Configuration
+## Step 4: Test Your Live Store
 
-Create a `netlify.toml` file in the root directory:
+Once deployed:
 
-```toml
-[build]
-  command = "npm run build"
-  functions = "netlify/functions"
-  publish = ".next"
+1. **Visit your store**: https://your-project.vercel.app
+2. **Access admin panel**: https://your-project.vercel.app/admin/login
+3. **Add a product**: Upload with a public image URL
+4. **Test checkout**: Buy a product (guest checkout)
 
-[functions]
-  node_bundler = "esbuild"
+## Environment Variables Explained
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-[env.production]
-  NODE_ENV = "production"
-```
-
-## Step 6: Updating Products on Production
-
-1. Go to your live website: `your-site-name.netlify.app/admin/login`
-2. Log in with your admin password
-3. Add, edit, or delete products just like locally
-
-## API Endpoints
-
-### Products
-- `GET /api/products` - Get all products
-- `POST /api/products` - Create product (admin)
-- `GET /api/products/[id]` - Get product by ID
-- `PUT /api/products/[id]` - Update product (admin)
-- `DELETE /api/products/[id]` - Delete product (admin)
-
-### Orders
-- `GET /api/orders` - Get all orders
-- `POST /api/orders` - Create new order
-- `GET /api/orders/[id]` - Get order by ID
-- `PUT /api/orders/[id]` - Update order status (admin)
-
-### Authentication
-- `POST /api/admin/login` - Admin login
-- `GET /api/admin/check` - Check if authenticated
-
-## Admin Password Security
-
-**IMPORTANT**: 
-- Change the default admin password immediately
-- Use a strong, unique password
-- Store it securely
-- Use environment variables, NOT hardcoded values
-- Netlify environment variables are encrypted and secure
-
-## Database Backups
-
-MongoDB Atlas automatically backs up your data daily. To export data:
-1. Go to MongoDB Atlas
-2. Click your cluster
-3. Go to "Collections" → "Export Collection"
-4. Download the data
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host/db` |
+| `ADMIN_PASSWORD` | Password to access admin panel | `SuperSecurePassword123!` |
+| `JWT_SECRET` | Secret for authentication tokens | `aRandom32CharacterStringHere1234` |
 
 ## Troubleshooting
 
-### Products not showing
-- Check MongoDB connection string in `.env`
-- Ensure MongoDB user has database access
-- Check browser console for errors
+### Database Connection Error
 
-### Admin login not working
-- Verify `ADMIN_PASSWORD` environment variable
-- Clear browser cookies and try again
-- Check server logs
+**Problem**: "DATABASE_URL is not set" or connection timeout
 
-### Images not loading
-- Ensure image URLs are publicly accessible
-- Use direct image links, not sharing links
+**Solution**:
+1. Verify `DATABASE_URL` is set in Vercel environment variables
+2. Check Neon console for correct connection string
+3. Ensure Neon project is active (not paused)
 
-### Cart not persisting
-- Make sure localStorage is enabled
-- Check browser privacy settings
-- Clear cache if having issues
+### Admin Login Not Working
 
-## Production Checklist
+**Problem**: Password doesn't work at `/admin/login`
 
-- [ ] Change admin password to something secure
-- [ ] Set random JWT_SECRET (use `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
-- [ ] Verify MongoDB backups are configured
-- [ ] Test checkout flow end-to-end
-- [ ] Set up error monitoring (optional: Sentry, LogRocket)
-- [ ] Configure custom domain in Netlify
-- [ ] Enable SSL/HTTPS (Netlify does this automatically)
-- [ ] Add privacy policy and terms of service pages
+**Solution**:
+1. Check the `ADMIN_PASSWORD` in Vercel environment variables
+2. Make sure it matches the password you set
+3. Clear browser cookies and try again
 
-## Performance Tips
+### Products Not Loading
 
-1. Optimize product images before uploading
-2. Use CDN for static assets
-3. Monitor database query performance
-4. Enable MongoDB connection pooling
-5. Cache frequently accessed products
+**Problem**: Homepage shows "No products" or error
+
+**Solution**:
+1. Run `/scripts/init-db.sql` in Neon SQL Editor
+2. Add products via admin panel
+3. Check Neon database has `products` table
+
+### Images Not Showing
+
+**Problem**: Product images display as broken
+
+**Solution**:
+1. Use fully qualified URLs (https://...)
+2. For production, use Vercel Blob for image storage
+3. Test image URL in browser first
+
+## Upgrading to Production
+
+### Add Vercel Blob for Images
+
+For production-grade image storage:
+
+1. Go to Vercel Dashboard → Your Project → Storage
+2. Create a "Blob" storage
+3. Use it in admin panel to upload images
+
+### Set Up Email Notifications
+
+Add order confirmation emails:
+
+1. Use SendGrid, Mailgun, or Gmail
+2. Add `SMTP_*` environment variables
+3. Integrate with checkout API
+
+### Add Payment Processing
+
+Integrate Stripe or Razorpay:
+
+1. Get API keys from payment provider
+2. Add environment variables
+3. Modify checkout API to process payments
+
+## File Structure
+
+```
+app/
+├── api/
+│   ├── products/     # Product CRUD
+│   ├── orders/       # Order management
+│   └── admin/        # Admin auth
+├── admin/            # Admin panel pages
+├── product/          # Product detail pages
+├── cart/             # Shopping cart
+├── checkout/         # Checkout page
+└── page.tsx          # Homepage
+lib/
+├── db.ts             # Database functions
+└── auth.ts           # Authentication helpers
+scripts/
+└── init-db.sql       # Database schema
+```
 
 ## Support
 
-For issues or questions:
-1. Check the MongoDB Atlas documentation
-2. Review Next.js deployment guide
-3. Check Netlify function logs in dashboard
-4. Verify environment variables are set correctly
+For issues:
 
-## License
+1. Check logs in Vercel Dashboard
+2. Check Neon console for database issues
+3. Verify all environment variables are set
+4. Test locally first before deploying
 
-This project is open source and available under the MIT License.
+## Security Notes
 
----
+⚠️ **Important**:
+- Change `ADMIN_PASSWORD` and `JWT_SECRET` to strong values
+- Don't commit `.env.local` to Git
+- Use HTTPS only (Vercel provides this)
+- Keep Neon credentials secure
+- Regenerate secrets periodically
 
-**Happy selling! Your e-commerce store is now live!** 🚀
+Good luck with your store! 🚀

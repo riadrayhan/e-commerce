@@ -7,12 +7,13 @@ import { ShoppingBag, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface Product {
-  _id: string;
+  id: string;
   name: string;
   price: number;
   description: string;
-  imageUrl?: string;
+  image_url?: string;
   stock: number;
+  created_at?: string;
 }
 
 export default function Home() {
@@ -41,9 +42,10 @@ export default function Home() {
   const fetchProducts = async () => {
     try {
       const response = await fetch('/api/products');
-      const data = await response.json();
-      setProducts(data);
-      setFilteredProducts(data);
+      const result = await response.json();
+      const products = result.data || result || [];
+      setProducts(products);
+      setFilteredProducts(products);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -143,11 +145,11 @@ export default function Home() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {filteredProducts.map((product) => (
-                <Link key={product._id} href={`/product/${product._id}`}>
+                <Link key={product.id} href={`/product/${product.id}`}>
                   <div className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-primary transition-all h-full flex flex-col cursor-pointer">
-                    {product.imageUrl && (
+                    {product.image_url && (
                       <img
-                        src={product.imageUrl}
+                        src={product.image_url}
                         alt={product.name}
                         className="w-full h-40 object-cover"
                       />

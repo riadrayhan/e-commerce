@@ -1,122 +1,128 @@
-import mongoose from 'mongoose';
+import { neon } from '@neondatabase/serverless';
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is not set');
 }
 
-let cached = (global as any).mongoose;
+export const sql = neon(process.env.DATABASE_URL);
 
-if (!cached) {
-  cached = (global as any).mongoose = { conn: null, promise: null };
-}
-
-export async function connectToDatabase() {
-  if (cached.conn) {
-    return cached.conn;
+// Helper function for safe queries
+export async function query<T = any>(
+  strings: TemplateStringsArray,
+  ...values: any[]
+): Promise<T[]> {
+  try {
+    const result = await sql(strings, ...values);
+    return result as T[];
+  } catch (error) {
+    console.error('[DB Error]', error);
+    throw error;
   }
-
-  if (!cached.promise) {
-    const opts = {
-      bufferCommands: false,
-    };
-
-    cached.promise = mongoose
-      .connect(MONGODB_URI!, opts)
-      .then((mongoose) => {
-        return mongoose;
-      });
-  }
-  cached.conn = await cached.promise;
-  return cached.conn;
 }
 
-// Product Schema
-const productSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    price: {
-      type: Number,
-      required: true,
-    },
-    description: {
-      type: String,
-      required: true,
-    },
-    imageId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'fs.files',
-    },
-    imageUrl: {
-      type: String,
-    },
-    stock: {
-      type: Number,
-      default: 100,
-    },
-    category: {
-      type: String,
-      default: 'Daily Essentials',
-    },
-  },
-  { timestamps: true }
-);
+// Product operations
+export async function getProducts() {
+  return query(
+    `SELECT id, name, price, description, image_url, stock, created_at FROM products WHERE stock > 0 ORDER BY created_at DESC`
+  );
+}
 
-// Order Schema
-const orderSchema = new mongoose.Schema(
-  {
-    orderNumber: {
-      type: String,
-      unique: true,
-      required: true,
-    },
-    items: [
-      {
-        productId: mongoose.Schema.Types.ObjectId,
-        productName: String,
-        price: Number,
-        quantity: Number,
-      },
-    ],
-    customer: {
-      name: {
-        type: String,
-        required: true,
-      },
-      phone: {
-        type: String,
-        required: true,
-      },
-      address: {
-        type: String,
-        required: true,
-      },
-      city: String,
-      pincode: String,
-    },
-    totalAmount: {
-      type: Number,
-      required: true,
-    },
-    status: {
-      type: String,
-      enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'],
-      default: 'pending',
-    },
-    paymentMethod: {
-      type: String,
-      default: 'cash_on_delivery',
-    },
-  },
-  { timestamps: true }
-);
+export async function getProductById(id: string) {
+  const result = await query(
+    `SELECT id, name, price, description, image_url, stock, created_at FROM products WHERE id = $1`,
+    [id]
+  );
+  return result[0];
+}
 
-export const Product =
-  mongoose.models.Product || mongoose.model('Product', productSchema);
-export const Order =
-  mongoose.models.Order || mongoose.model('Order', orderSchema);
+export async function createProduct(
+  name: string,
+  price: number,
+  description: string,
+  imageUrl: string,
+  stock: number
+) {
+  const result = await query(
+    `INSERT INTO products (name, price, description, image_url, stock) 
+     VALUES ($1, $2, $3, $4, $5) 
+     RETURNING id, name, price, description, image_url, stock, created_at`,
+    [name, price, description, imageUrl, stock]
+  );
+  return result[0];
+}
+
+export async function updateProduct(
+  id: string,
+  name: string,
+  price: number,
+  description: string,
+  imageUrl: string,
+  stock: number
+) {
+  const result = await query(
+    `UPDATE products SET name = $1, price = $2, description = $3, image_url = $4, stock = $5, updated_at = NOW()
+     WHERE id = $6
+     RETURNING id, name, price, description, image_url, stock, created_at`,
+    [name, price, description, imageUrl, stock, id]
+  );
+  return result[0];
+}
+
+export async function deleteProduct(id: string) {
+  const result = await query(
+    `DELETE FROM products WHERE id = $1 RETURNING id`,
+    [id]
+  );
+  return result[0];
+}
+
+// Order operations
+export async function createOrder(
+  customerName: string,
+  customerEmail: string,
+  customerPhone: string,
+  customerAddress: string,
+  items: Array<{ productId: string; quantity: number; price: number }>,
+  totalAmount: number,
+  status: string = 'pending'
+) {
+  const result = await query(
+    `INSERT INTO orders (customer_name, customer_email, customer_phone, customer_address, items, total_amount, status)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+     RETURNING id, customer_name, customer_email, customer_phone, customer_address, items, total_amount, status, created_at`,
+    [customerName, customerEmail, customerPhone, customerAddress, JSON.stringify(items), totalAmount, status]
+  );
+  return result[0];
+}
+
+export async function getOrderById(id: string) {
+  const result = await query(
+    `SELECT id, customer_name, customer_email, customer_phone, customer_address, items, total_amount, status, created_at
+     FROM orders WHERE id = $1`,
+    [id]
+  );
+  return result[0];
+}
+
+export async function getOrders(limit: number = 50) {
+  return query(
+    `SELECT id, customer_name, customer_email, customer_phone, customer_address, items, total_amount, status, created_at
+     FROM orders ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+}
+
+export async function updateOrderStatus(id: string, status: string) {
+  const result = await query(
+    `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, status, updated_at`,
+    [status, id]
+  );
+  return result[0];
+}
+
+// Admin operations
+export async function verifyAdminPassword(password: string): Promise<boolean> {
+  const bcrypt = await import('bcryptjs');
+  const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH || '';
+  return bcrypt.compare(password, adminPasswordHash);
+}

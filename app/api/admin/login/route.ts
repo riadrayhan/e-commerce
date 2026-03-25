@@ -10,16 +10,16 @@ export async function POST(request: NextRequest) {
 
     if (!password || password !== ADMIN_PASSWORD) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { success: false, error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    const token = jwt.sign({ role: 'admin' }, JWT_SECRET, {
+    const token = jwt.sign({ role: 'admin', iat: Date.now() }, JWT_SECRET, {
       expiresIn: '7d',
     });
 
-    const response = NextResponse.json({ token }, { status: 200 });
+    const response = NextResponse.json({ success: true, token }, { status: 200 });
     response.cookies.set('adminToken', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Login failed' },
+      { success: false, error: 'Login failed' },
       { status: 500 }
     );
   }

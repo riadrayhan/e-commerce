@@ -1,15 +1,14 @@
-import { connectToDatabase, Product } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getProducts, createProduct } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await connectToDatabase();
-    const products = await Product.find({}).select('-imageId');
-    return NextResponse.json(products);
+    const products = await getProducts();
+    return NextResponse.json({ success: true, data: products });
   } catch (error) {
-    console.error('Failed to fetch products:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to fetch products' },
+      { success: false, error: 'Failed to fetch products' },
       { status: 500 }
     );
   }
@@ -17,25 +16,29 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectToDatabase();
     const body = await request.json();
+    const { name, price, description, imageUrl, stock } = body;
 
-    const product = new Product({
-      name: body.name,
-      price: body.price,
-      description: body.description,
-      imageUrl: body.imageUrl,
-      stock: body.stock || 100,
-      category: body.category || 'Daily Essentials',
-    });
+    if (!name || !price || !description) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
 
-    await product.save();
+    const product = await createProduct(
+      name,
+      price,
+      description,
+      imageUrl || '',
+      stock || 100
+    );
 
-    return NextResponse.json(product, { status: 201 });
+    return NextResponse.json({ success: true, data: product }, { status: 201 });
   } catch (error) {
-    console.error('Failed to create product:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      { success: false, error: 'Failed to create product' },
       { status: 500 }
     );
   }

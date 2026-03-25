@@ -1,21 +1,20 @@
-import { connectToDatabase, Order } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getOrders, createOrder } from '@/lib/db';
 
-function generateOrderNumber() {
+function generateOrderId() {
   const timestamp = Date.now();
   const random = Math.floor(Math.random() * 1000);
   return `ORD-${timestamp}-${random}`;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await connectToDatabase();
-    const orders = await Order.find({}).sort({ createdAt: -1 });
-    return NextResponse.json(orders);
+    const orders = await getOrders(100);
+    return NextResponse.json({ success: true, data: orders });
   } catch (error) {
-    console.error('Failed to fetch orders:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to fetch orders' },
+      { success: false, error: 'Failed to fetch orders' },
       { status: 500 }
     );
   }
@@ -23,25 +22,38 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectToDatabase();
     const body = await request.json();
+    const {
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerAddress,
+      items,
+      totalAmount,
+    } = body;
 
-    const order = new Order({
-      orderNumber: generateOrderNumber(),
-      items: body.items,
-      customer: body.customer,
-      totalAmount: body.totalAmount,
-      status: 'pending',
-      paymentMethod: body.paymentMethod || 'cash_on_delivery',
-    });
+    if (!customerName || !customerPhone || !customerAddress || !items || !totalAmount) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
 
-    await order.save();
+    const order = await createOrder(
+      customerName,
+      customerEmail || '',
+      customerPhone,
+      customerAddress,
+      items,
+      totalAmount,
+      'pending'
+    );
 
-    return NextResponse.json(order, { status: 201 });
+    return NextResponse.json({ success: true, data: order }, { status: 201 });
   } catch (error) {
-    console.error('Failed to create order:', error);
+    console.error('[API Error]', error);
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { success: false, error: 'Failed to create order' },
       { status: 500 }
     );
   }

@@ -11,12 +11,13 @@ import { toast } from 'sonner';
 import { Trash2, Edit2, Plus, LogOut } from 'lucide-react';
 
 interface Product {
-  _id: string;
+  id: string;
   name: string;
   price: number;
   description: string;
-  imageUrl?: string;
+  image_url?: string;
   stock: number;
+  created_at?: string;
 }
 
 function AdminDashboardContent() {
@@ -29,7 +30,7 @@ function AdminDashboardContent() {
     name: '',
     price: '',
     description: '',
-    imageUrl: '',
+    image_url: '',
     stock: '100',
   });
 
@@ -40,8 +41,9 @@ function AdminDashboardContent() {
   const fetchProducts = async () => {
     try {
       const response = await fetch('/api/products');
-      const data = await response.json();
-      setProducts(data);
+      const result = await response.json();
+      const products = result.data || result || [];
+      setProducts(products);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to load products');
@@ -63,7 +65,7 @@ function AdminDashboardContent() {
         name: formData.name,
         price: parseFloat(formData.price),
         description: formData.description,
-        imageUrl: formData.imageUrl,
+        imageUrl: formData.image_url,
         stock: parseInt(formData.stock),
       };
 
@@ -108,10 +110,10 @@ function AdminDashboardContent() {
       name: product.name,
       price: product.price.toString(),
       description: product.description,
-      imageUrl: product.imageUrl || '',
+      image_url: product.image_url || '',
       stock: product.stock.toString(),
     });
-    setEditingId(product._id);
+    setEditingId(product.id);
     setShowForm(true);
   };
 
@@ -140,7 +142,7 @@ function AdminDashboardContent() {
       name: '',
       price: '',
       description: '',
-      imageUrl: '',
+      image_url: '',
       stock: '100',
     });
     setEditingId(null);
@@ -218,7 +220,7 @@ function AdminDashboardContent() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Price *
+                      Price (₹) *
                     </label>
                     <Input
                       type="number"
@@ -233,7 +235,7 @@ function AdminDashboardContent() {
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Stock
+                      Stock Quantity
                     </label>
                     <Input
                       type="number"
@@ -267,11 +269,14 @@ function AdminDashboardContent() {
                   <Input
                     type="url"
                     placeholder="https://example.com/image.jpg"
-                    value={formData.imageUrl}
+                    value={formData.image_url}
                     onChange={(e) =>
-                      setFormData({ ...formData, imageUrl: e.target.value })
+                      setFormData({ ...formData, image_url: e.target.value })
                     }
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use HTTPS image URLs. For testing, use: https://via.placeholder.com/200
+                  </p>
                 </div>
 
                 <div className="flex gap-2">
@@ -296,11 +301,11 @@ function AdminDashboardContent() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map((product) => (
-            <Card key={product._id} className="border-border">
+            <Card key={product.id} className="border-border">
               <CardContent className="pt-4">
-                {product.imageUrl && (
+                {product.image_url && (
                   <img
-                    src={product.imageUrl}
+                    src={product.image_url}
                     alt={product.name}
                     className="w-full h-40 object-cover rounded-lg mb-3"
                   />
@@ -332,7 +337,7 @@ function AdminDashboardContent() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => handleDelete(product._id)}
+                    onClick={() => handleDelete(product.id)}
                     className="flex-1 flex items-center justify-center gap-1"
                   >
                     <Trash2 className="w-3 h-3" />
