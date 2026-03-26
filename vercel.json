@@ -3,11 +3,6 @@
   "devCommand": "next dev",
   "installCommand": "pnpm install",
   "framework": "nextjs",
-  "projectSettings": {
-    "installCommand": "pnpm install",
-    "buildCommand": "next build",
-    "outputDirectory": ".next"
-  },
   "env": {
     "DATABASE_URL": "@database_url",
     "ADMIN_PASSWORD": "@admin_password",
