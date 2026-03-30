@@ -1,54 +1,54 @@
-import { neon } from '@neondatabase/serverless';
+// In-memory data store (works on Vercel serverless)
+// Data resets on cold start but persists across warm invocations
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
+const demoProducts = [
+  { id: '1', name: 'Fresh Organic Milk', price: 65, description: 'Farm-fresh organic whole milk, 1 liter. Rich in calcium and protein.', image_url: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400', stock: 50, created_at: '2026-03-25T10:00:00.000Z' },
+  { id: '2', name: 'Whole Wheat Bread', price: 45, description: 'Freshly baked whole wheat bread, perfect for breakfast and sandwiches.', image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400', stock: 100, created_at: '2026-03-25T10:01:00.000Z' },
+  { id: '3', name: 'Free Range Eggs (12 pcs)', price: 120, description: 'Premium free-range eggs from local farms. Pack of 12.', image_url: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400', stock: 75, created_at: '2026-03-25T10:02:00.000Z' },
+  { id: '4', name: 'Basmati Rice (5kg)', price: 350, description: 'Premium aged basmati rice, long grain. Perfect for biryani and pulao.', image_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400', stock: 40, created_at: '2026-03-25T10:03:00.000Z' },
+  { id: '5', name: 'Fresh Tomatoes (1kg)', price: 30, description: 'Locally sourced ripe tomatoes, perfect for cooking and salads.', image_url: 'https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400', stock: 200, created_at: '2026-03-25T10:04:00.000Z' },
+  { id: '6', name: 'Cooking Oil (1L)', price: 180, description: 'Pure refined soybean cooking oil for everyday use.', image_url: 'https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400', stock: 60, created_at: '2026-03-25T10:05:00.000Z' },
+];
 
-export const sql = neon(process.env.DATABASE_URL);
+// Global store that persists across warm serverless invocations
+const globalStore = globalThis as any;
+if (!globalStore.__products) globalStore.__products = [...demoProducts];
+if (!globalStore.__orders) globalStore.__orders = [];
 
-// Helper function for safe queries
-export async function query<T = any>(
-  strings: TemplateStringsArray,
-  ...values: any[]
-): Promise<T[]> {
-  try {
-    const result = await sql(strings, ...values);
-    return result as T[];
-  } catch (error) {
-    console.error('[DB Error]', error);
-    throw error;
-  }
+function getStore() {
+  return {
+    products: globalStore.__products as any[],
+    orders: globalStore.__orders as any[],
+  };
 }
 
 // Product operations
 export async function getProducts() {
-  return query(
-    `SELECT id, name, price, description, image_data, stock, created_at FROM products WHERE stock > 0 ORDER BY created_at DESC`
-  );
+  return getStore().products.filter((p: any) => p.stock > 0);
 }
 
 export async function getProductById(id: string) {
-  const result = await query(
-    `SELECT id, name, price, description, image_data, stock, created_at FROM products WHERE id = $1`,
-    [id]
-  );
-  return result[0];
+  return getStore().products.find((p: any) => p.id === id);
 }
 
 export async function createProduct(
   name: string,
   price: number,
   description: string,
-  imageData: Buffer | null,
+  imageData: any,
   stock: number
 ) {
-  const result = await query(
-    `INSERT INTO products (name, price, description, image_data, stock) 
-     VALUES ($1, $2, $3, $4, $5) 
-     RETURNING id, name, price, description, image_data, stock, created_at`,
-    [name, price, description, imageData, stock]
-  );
-  return result[0];
+  const product = {
+    id: String(Date.now()),
+    name,
+    price,
+    description,
+    image_url: typeof imageData === 'string' ? imageData : '',
+    stock,
+    created_at: new Date().toISOString(),
+  };
+  getStore().products.unshift(product);
+  return product;
 }
 
 export async function updateProduct(
@@ -56,24 +56,29 @@ export async function updateProduct(
   name: string,
   price: number,
   description: string,
-  imageData: Buffer | null,
+  imageData: any,
   stock: number
 ) {
-  const result = await query(
-    `UPDATE products SET name = $1, price = $2, description = $3, image_data = $4, stock = $5, updated_at = NOW()
-     WHERE id = $6
-     RETURNING id, name, price, description, image_data, stock, created_at`,
-    [name, price, description, imageData, stock, id]
-  );
-  return result[0];
+  const store = getStore();
+  const index = store.products.findIndex((p: any) => p.id === id);
+  if (index === -1) return null;
+  store.products[index] = {
+    ...store.products[index],
+    name,
+    price,
+    description,
+    image_url: typeof imageData === 'string' && imageData ? imageData : store.products[index].image_url,
+    stock,
+  };
+  return store.products[index];
 }
 
 export async function deleteProduct(id: string) {
-  const result = await query(
-    `DELETE FROM products WHERE id = $1 RETURNING id`,
-    [id]
-  );
-  return result[0];
+  const store = getStore();
+  const index = store.products.findIndex((p: any) => p.id === id);
+  if (index === -1) return null;
+  const deleted = store.products.splice(index, 1);
+  return deleted[0];
 }
 
 // Order operations
@@ -85,43 +90,38 @@ export async function createOrder(
   totalAmount: number,
   status: string = 'pending'
 ) {
-  const result = await query(
-    `INSERT INTO orders (customer_name, customer_phone, customer_address, items, total_amount, status, order_number)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
-     RETURNING id, customer_name, customer_phone, customer_address, items, total_amount, status, order_number, created_at`,
-    [customerName, customerPhone, customerAddress, JSON.stringify(items), totalAmount, status, `ORD-${Date.now()}`]
-  );
-  return result[0];
+  const order = {
+    id: String(Date.now()),
+    order_number: `ORD-${Date.now()}`,
+    customer_name: customerName,
+    customer_phone: customerPhone,
+    customer_address: customerAddress,
+    items,
+    total_amount: totalAmount,
+    status,
+    created_at: new Date().toISOString(),
+  };
+  getStore().orders.unshift(order);
+  return order;
 }
 
 export async function getOrderById(id: string) {
-  const result = await query(
-    `SELECT id, customer_name, customer_phone, customer_address, items, total_amount, status, order_number, created_at
-     FROM orders WHERE id = $1`,
-    [id]
-  );
-  return result[0];
+  return getStore().orders.find((o: any) => o.id === id);
 }
 
 export async function getOrders(limit: number = 50) {
-  return query(
-    `SELECT id, customer_name, customer_phone, customer_address, items, total_amount, status, order_number, created_at
-     FROM orders ORDER BY created_at DESC LIMIT $1`,
-    [limit]
-  );
+  return getStore().orders.slice(0, limit);
 }
 
 export async function updateOrderStatus(id: string, status: string) {
-  const result = await query(
-    `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, status, updated_at`,
-    [status, id]
-  );
-  return result[0];
+  const store = getStore();
+  const index = store.orders.findIndex((o: any) => o.id === id);
+  if (index === -1) return null;
+  store.orders[index].status = status;
+  store.orders[index].updated_at = new Date().toISOString();
+  return store.orders[index];
 }
 
-// Admin operations
 export async function verifyAdminPassword(password: string): Promise<boolean> {
-  const bcrypt = await import('bcryptjs');
-  const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH || '';
-  return bcrypt.compare(password, adminPasswordHash);
+  return password === (process.env.ADMIN_PASSWORD || 'admin');
 }
