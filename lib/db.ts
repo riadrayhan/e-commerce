@@ -1,5 +1,8 @@
-// In-memory data store (works on Vercel serverless)
-// Data resets on cold start but persists across warm invocations
+// Persistent data store
+// Uses Upstash Redis in production (via UPSTASH_REDIS_REST_URL env var)
+// Falls back to in-memory storage for local development
+
+import { Redis } from '@upstash/redis';
 
 const demoProducts = [
   { id: '1', name: 'Fresh Organic Milk', price: 65, description: 'Farm-fresh organic whole milk, 1 liter. Rich in calcium and protein.', image_url: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400', stock: 50, created_at: '2026-03-25T10:00:00.000Z' },
@@ -10,25 +13,70 @@ const demoProducts = [
   { id: '6', name: 'Cooking Oil (1L)', price: 180, description: 'Pure refined soybean cooking oil for everyday use.', image_url: 'https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400', stock: 60, created_at: '2026-03-25T10:05:00.000Z' },
 ];
 
-// Global store that persists across warm serverless invocations
+// --- Storage layer ---
+const USE_REDIS = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+
+let redis: Redis | null = null;
+function getRedis(): Redis {
+  if (!redis) {
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
+  }
+  return redis;
+}
+
+// In-memory fallback for local development
 const globalStore = globalThis as any;
 if (!globalStore.__products) globalStore.__products = [...demoProducts];
 if (!globalStore.__orders) globalStore.__orders = [];
 
-function getStore() {
-  return {
-    products: globalStore.__products as any[],
-    orders: globalStore.__orders as any[],
-  };
+async function loadProducts(): Promise<any[]> {
+  if (USE_REDIS) {
+    const data = await getRedis().get<any[]>('products');
+    if (!data) {
+      await getRedis().set('products', demoProducts);
+      return [...demoProducts];
+    }
+    return data;
+  }
+  return globalStore.__products;
+}
+
+async function saveProducts(products: any[]) {
+  if (USE_REDIS) {
+    await getRedis().set('products', products);
+  } else {
+    globalStore.__products = products;
+  }
+}
+
+async function loadOrders(): Promise<any[]> {
+  if (USE_REDIS) {
+    const data = await getRedis().get<any[]>('orders');
+    return data || [];
+  }
+  return globalStore.__orders;
+}
+
+async function saveOrders(orders: any[]) {
+  if (USE_REDIS) {
+    await getRedis().set('orders', orders);
+  } else {
+    globalStore.__orders = orders;
+  }
 }
 
 // Product operations
 export async function getProducts() {
-  return getStore().products.filter((p: any) => p.stock > 0);
+  const products = await loadProducts();
+  return products.filter((p: any) => p.stock > 0);
 }
 
 export async function getProductById(id: string) {
-  return getStore().products.find((p: any) => p.id === id);
+  const products = await loadProducts();
+  return products.find((p: any) => p.id === id);
 }
 
 export async function createProduct(
@@ -38,6 +86,7 @@ export async function createProduct(
   imageData: any,
   stock: number
 ) {
+  const products = await loadProducts();
   const product = {
     id: String(Date.now()),
     name,
@@ -47,7 +96,8 @@ export async function createProduct(
     stock,
     created_at: new Date().toISOString(),
   };
-  getStore().products.unshift(product);
+  products.unshift(product);
+  await saveProducts(products);
   return product;
 }
 
@@ -59,25 +109,27 @@ export async function updateProduct(
   imageData: any,
   stock: number
 ) {
-  const store = getStore();
-  const index = store.products.findIndex((p: any) => p.id === id);
+  const products = await loadProducts();
+  const index = products.findIndex((p: any) => p.id === id);
   if (index === -1) return null;
-  store.products[index] = {
-    ...store.products[index],
+  products[index] = {
+    ...products[index],
     name,
     price,
     description,
-    image_url: typeof imageData === 'string' && imageData ? imageData : store.products[index].image_url,
+    image_url: typeof imageData === 'string' && imageData ? imageData : products[index].image_url,
     stock,
   };
-  return store.products[index];
+  await saveProducts(products);
+  return products[index];
 }
 
 export async function deleteProduct(id: string) {
-  const store = getStore();
-  const index = store.products.findIndex((p: any) => p.id === id);
+  const products = await loadProducts();
+  const index = products.findIndex((p: any) => p.id === id);
   if (index === -1) return null;
-  const deleted = store.products.splice(index, 1);
+  const deleted = products.splice(index, 1);
+  await saveProducts(products);
   return deleted[0];
 }
 
@@ -90,6 +142,7 @@ export async function createOrder(
   totalAmount: number,
   status: string = 'pending'
 ) {
+  const orders = await loadOrders();
   const order = {
     id: String(Date.now()),
     order_number: `ORD-${Date.now()}`,
@@ -101,25 +154,29 @@ export async function createOrder(
     status,
     created_at: new Date().toISOString(),
   };
-  getStore().orders.unshift(order);
+  orders.unshift(order);
+  await saveOrders(orders);
   return order;
 }
 
 export async function getOrderById(id: string) {
-  return getStore().orders.find((o: any) => o.id === id);
+  const orders = await loadOrders();
+  return orders.find((o: any) => o.id === id);
 }
 
 export async function getOrders(limit: number = 50) {
-  return getStore().orders.slice(0, limit);
+  const orders = await loadOrders();
+  return orders.slice(0, limit);
 }
 
 export async function updateOrderStatus(id: string, status: string) {
-  const store = getStore();
-  const index = store.orders.findIndex((o: any) => o.id === id);
+  const orders = await loadOrders();
+  const index = orders.findIndex((o: any) => o.id === id);
   if (index === -1) return null;
-  store.orders[index].status = status;
-  store.orders[index].updated_at = new Date().toISOString();
-  return store.orders[index];
+  orders[index].status = status;
+  orders[index].updated_at = new Date().toISOString();
+  await saveOrders(orders);
+  return orders[index];
 }
 
 export async function verifyAdminPassword(password: string): Promise<boolean> {
