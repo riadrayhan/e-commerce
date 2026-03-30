@@ -128,11 +128,12 @@ export default function Home() {
   const addToCart = (product: Product) => {
     try {
       const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-      const existingItem = cart.find((item: any) => item.id === product.id);
+      const productId = (product as any)._id || product.id;
+      const existingItem = cart.find((item: any) => item._id === productId);
       if (existingItem) {
         existingItem.quantity += 1;
       } else {
-        cart.push({ ...product, quantity: 1 });
+        cart.push({ _id: productId, name: product.name, price: product.price, imageUrl: (product as any).image_url || (product as any).imageUrl, quantity: 1 });
       }
       localStorage.setItem('cart', JSON.stringify(cart));
       setCartCount(cart.length);
@@ -254,75 +255,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="hidden md:block">
-              <div className="bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl h-96 flex items-center justify-center">
-                <ShoppingCart className="w-32 h-32 text-primary/30" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Features Section */}
-      <section className="bg-background py-12 sm:py-20 border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-center mb-12">Why Choose DailyMart?</h2>
-          <div className="grid md:grid-cols-4 gap-6">
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="bg-primary/10 p-4 rounded-full">
-                    <Truck className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-                <h3 className="font-bold mb-2">Fast Delivery</h3>
-                <p className="text-sm text-muted-foreground">
-                  Same-day delivery in select areas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="bg-primary/10 p-4 rounded-full">
-                    <Shield className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-                <h3 className="font-bold mb-2">100% Secure</h3>
-                <p className="text-sm text-muted-foreground">
-                  Safe payment & data protection
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="bg-primary/10 p-4 rounded-full">
-                    <Clock className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-                <h3 className="font-bold mb-2">24/7 Support</h3>
-                <p className="text-sm text-muted-foreground">
-                  Always here to help you
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="bg-primary/10 p-4 rounded-full">
-                    <Star className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-                <h3 className="font-bold mb-2">Premium Quality</h3>
-                <p className="text-sm text-muted-foreground">
-                  Carefully selected products
-                </p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
@@ -373,7 +306,7 @@ export default function Home() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-2xl font-bold text-primary">
-                            ₹{product.price}
+                            TK {product.price}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             Stock: {product.stock}

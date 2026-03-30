@@ -7,23 +7,19 @@ import { Button } from '@/components/ui/button';
 import { ShoppingBag, Check, Package } from 'lucide-react';
 
 interface Order {
-  _id: string;
-  orderNumber: string;
+  id: string;
+  order_number: string;
   items: Array<{
     productName: string;
     price: number;
     quantity: number;
   }>;
-  customer: {
-    name: string;
-    phone: string;
-    address: string;
-    city: string;
-    pincode: string;
-  };
-  totalAmount: number;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  total_amount: number;
   status: string;
-  createdAt: string;
+  created_at: string;
 }
 
 export default function OrderSuccessPage() {
@@ -40,8 +36,8 @@ export default function OrderSuccessPage() {
     try {
       const response = await fetch(`/api/orders/${id}`);
       if (response.ok) {
-        const data = await response.json();
-        setOrder(data);
+        const result = await response.json();
+        setOrder(result.data || result);
       }
     } catch (error) {
       console.error('Error fetching order:', error);
@@ -119,14 +115,14 @@ export default function OrderSuccessPage() {
               <div className="pb-3 border-b border-border">
                 <p className="text-sm text-muted-foreground">Order Number</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {order.orderNumber}
+                  {order.order_number}
                 </p>
               </div>
 
               <div className="pb-3 border-b border-border">
                 <p className="text-sm text-muted-foreground">Order Date</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {new Date(order.createdAt).toLocaleDateString()}
+                  {new Date(order.created_at).toLocaleDateString()}
                 </p>
               </div>
 
@@ -140,7 +136,7 @@ export default function OrderSuccessPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Amount</p>
                 <p className="text-2xl font-bold text-primary">
-                  ₹{order.totalAmount.toFixed(2)}
+                  TK {order.total_amount.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -156,37 +152,22 @@ export default function OrderSuccessPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Name</p>
                 <p className="font-semibold text-foreground">
-                  {order.customer.name}
+                  {order.customer_name}
                 </p>
               </div>
 
               <div>
                 <p className="text-sm text-muted-foreground">Phone</p>
                 <p className="font-semibold text-foreground">
-                  {order.customer.phone}
+                  {order.customer_phone}
                 </p>
               </div>
 
               <div>
                 <p className="text-sm text-muted-foreground">Address</p>
                 <p className="font-semibold text-foreground">
-                  {order.customer.address}
+                  {order.customer_address}
                 </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">City</p>
-                  <p className="font-semibold text-foreground">
-                    {order.customer.city}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Pincode</p>
-                  <p className="font-semibold text-foreground">
-                    {order.customer.pincode}
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -212,10 +193,10 @@ export default function OrderSuccessPage() {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-foreground">
-                    ₹{(item.price * item.quantity).toFixed(2)}
+                    TK {(item.price * item.quantity).toFixed(2)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    ₹{item.price}/unit
+                    TK {item.price}/unit
                   </p>
                 </div>
               </div>
@@ -229,7 +210,7 @@ export default function OrderSuccessPage() {
           <ul className="space-y-2 text-muted-foreground">
             <li className="flex gap-2">
               <span className="text-primary font-bold">1.</span>
-              <span>You will receive a confirmation call on {order.customer.phone}</span>
+              <span>You will receive a confirmation call on {order.customer_phone}</span>
             </li>
             <li className="flex gap-2">
               <span className="text-primary font-bold">2.</span>

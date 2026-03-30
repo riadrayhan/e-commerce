@@ -27,7 +27,13 @@ export default function CartPage() {
   const loadCart = () => {
     const cartJSON = localStorage.getItem('cart');
     if (cartJSON) {
-      setCart(JSON.parse(cartJSON));
+      const parsed = JSON.parse(cartJSON);
+      const normalized = parsed.map((item: any, index: number) => ({
+        ...item,
+        _id: item._id || item.id || `item-${index}`,
+      }));
+      setCart(normalized);
+      localStorage.setItem('cart', JSON.stringify(normalized));
     }
     setLoading(false);
   };
@@ -143,7 +149,7 @@ export default function CartPage() {
                         {item.name}
                       </h3>
                       <p className="text-primary font-bold text-lg">
-                        ₹{item.price}
+                        TK {item.price}
                       </p>
 
                       <div className="flex items-center gap-4 mt-4">
@@ -183,7 +189,7 @@ export default function CartPage() {
 
                     <div className="text-right">
                       <p className="text-lg font-bold text-foreground">
-                        ₹{(item.price * item.quantity).toFixed(2)}
+                        TK {(item.price * item.quantity).toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -201,17 +207,17 @@ export default function CartPage() {
                 <div className="space-y-3 mb-4 pb-4 border-b border-border">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
-                    <span>₹{subtotal.toFixed(2)}</span>
+                    <span>TK {subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
                     <span>Tax (10%)</span>
-                    <span>₹{tax.toFixed(2)}</span>
+                    <span>TK {tax.toFixed(2)}</span>
                   </div>
                 </div>
 
                 <div className="flex justify-between text-lg font-bold text-foreground mb-6">
                   <span>Total</span>
-                  <span className="text-primary">₹{total.toFixed(2)}</span>
+                  <span className="text-primary">TK {total.toFixed(2)}</span>
                 </div>
 
                 <Button

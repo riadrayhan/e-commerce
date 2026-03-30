@@ -26,7 +26,6 @@ export default function CheckoutPage() {
     phone: '',
     address: '',
     city: '',
-    pincode: '',
   });
 
   useEffect(() => {
@@ -52,15 +51,14 @@ export default function CheckoutPage() {
       !formData.name ||
       !formData.phone ||
       !formData.address ||
-      !formData.city ||
-      !formData.pincode
+      !formData.city
     ) {
       toast.error('Please fill all required fields');
       return;
     }
 
-    if (formData.phone.length !== 10) {
-      toast.error('Phone number must be 10 digits');
+    if (formData.phone.length !== 11) {
+      toast.error('Phone number must be 11 digits');
       return;
     }
 
@@ -75,21 +73,16 @@ export default function CheckoutPage() {
       const totalAmount = subtotal + tax;
 
       const orderData = {
+        customerName: formData.name,
+        customerPhone: formData.phone,
+        customerAddress: `${formData.address}, ${formData.city}`,
         items: cart.map((item) => ({
           productId: item._id,
           productName: item.name,
           price: item.price,
           quantity: item.quantity,
         })),
-        customer: {
-          name: formData.name,
-          phone: formData.phone,
-          address: formData.address,
-          city: formData.city,
-          pincode: formData.pincode,
-        },
         totalAmount,
-        paymentMethod: 'cash_on_delivery',
       };
 
       const response = await fetch('/api/orders', {
@@ -99,12 +92,12 @@ export default function CheckoutPage() {
       });
 
       if (response.ok) {
-        const order = await response.json();
+        const result = await response.json();
         localStorage.removeItem('cart');
         setSubmitted(true);
 
         setTimeout(() => {
-          router.push(`/order-success/${order._id}`);
+          router.push(`/order-success/${result.data?.id || result._id}`);
         }, 2000);
       } else {
         toast.error('Failed to place order');
@@ -203,9 +196,9 @@ export default function CheckoutPage() {
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      placeholder="10-digit mobile number"
+                      placeholder="11-digit mobile number"
                       disabled={loading}
-                      maxLength={10}
+                      maxLength={11}
                     />
                   </div>
 
@@ -223,34 +216,18 @@ export default function CheckoutPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        City *
-                      </label>
-                      <Input
-                        type="text"
-                        name="city"
-                        value={formData.city}
-                        onChange={handleInputChange}
-                        placeholder="City"
-                        disabled={loading}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Pincode *
-                      </label>
-                      <Input
-                        type="text"
-                        name="pincode"
-                        value={formData.pincode}
-                        onChange={handleInputChange}
-                        placeholder="Postal code"
-                        disabled={loading}
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      City *
+                    </label>
+                    <Input
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleInputChange}
+                      placeholder="City"
+                      disabled={loading}
+                    />
                   </div>
                 </div>
               </div>
@@ -302,7 +279,7 @@ export default function CheckoutPage() {
                     <span>
                       {item.name} x{item.quantity}
                     </span>
-                    <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                    <span>TK {(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -310,17 +287,17 @@ export default function CheckoutPage() {
               <div className="space-y-3 mb-4 pb-4 border-b border-border">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
-                  <span>₹{subtotal.toFixed(2)}</span>
+                  <span>TK {subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Tax (10%)</span>
-                  <span>₹{tax.toFixed(2)}</span>
+                  <span>TK {tax.toFixed(2)}</span>
                 </div>
               </div>
 
               <div className="flex justify-between text-lg font-bold text-foreground">
                 <span>Total</span>
-                <span className="text-primary">₹{total.toFixed(2)}</span>
+                <span className="text-primary">TK {total.toFixed(2)}</span>
               </div>
             </div>
           </div>

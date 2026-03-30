@@ -158,7 +158,7 @@ export default function ProductDetailPage() {
 
             <div className="mb-6">
               <span className="text-4xl font-bold text-primary">
-                ₹{product.price}
+                TK {product.price}
               </span>
               <div className="mt-2">
                 {product.stock > 0 ? (

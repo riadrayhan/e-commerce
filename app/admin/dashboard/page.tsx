@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AdminProtected } from '@/components/admin-protected';
 import { toast } from 'sonner';
-import { Trash2, Edit2, Plus, LogOut } from 'lucide-react';
+import { Trash2, Edit2, Plus, LogOut, Package, Eye } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -20,10 +20,24 @@ interface Product {
   created_at?: string;
 }
 
+interface Order {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  items: Array<{ productName?: string; productId?: string; price: number; quantity: number }>;
+  total_amount: number;
+  status: string;
+  created_at: string;
+}
+
 function AdminDashboardContent() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -36,19 +50,50 @@ function AdminDashboardContent() {
 
   useEffect(() => {
     fetchProducts();
+    fetchOrders();
   }, []);
 
   const fetchProducts = async () => {
     try {
       const response = await fetch('/api/products');
       const result = await response.json();
-      const products = result.data || result || [];
+      const products = Array.isArray(result.data) ? result.data : Array.isArray(result) ? result : [];
       setProducts(products);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to load products');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const response = await fetch('/api/orders');
+      const result = await response.json();
+      const orders = Array.isArray(result.data) ? result.data : Array.isArray(result) ? result : [];
+      setOrders(orders);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    }
+  };
+
+  const updateOrderStatus = async (id: string, status: string) => {
+    try {
+      const response = await fetch(`/api/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (response.ok) {
+        toast.success(`Order status updated to ${status}`);
+        fetchOrders();
+      } else {
+        toast.error('Failed to update order status');
+      }
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast.error('Failed to update order status');
     }
   };
 
@@ -181,6 +226,26 @@ function AdminDashboardContent() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Tabs */}
+        <div className="flex gap-4 mb-8 border-b border-border">
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`pb-3 px-2 font-semibold text-lg border-b-2 transition-colors ${activeTab === 'products' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            Products ({products.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`pb-3 px-2 font-semibold text-lg border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'orders' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            <Package className="w-5 h-5" />
+            Orders ({orders.length})
+          </button>
+        </div>
+
+        {/* Products Tab */}
+        {activeTab === 'products' && (
+          <>
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-3xl font-bold text-foreground">Products</h2>
           {!showForm && (
@@ -220,7 +285,7 @@ function AdminDashboardContent() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Price (₹) *
+                      Price (TK) *
                     </label>
                     <Input
                       type="number"
@@ -318,7 +383,7 @@ function AdminDashboardContent() {
                 </p>
                 <div className="flex justify-between items-center mb-4">
                   <span className="font-bold text-primary">
-                    ₹{product.price}
+                    TK {product.price}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     Stock: {product.stock}
@@ -362,6 +427,99 @@ function AdminDashboardContent() {
               Add First Product
             </Button>
           </div>
+        )}
+          </>
+        )}
+
+        {/* Orders Tab */}
+        {activeTab === 'orders' && (
+          <>
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-3xl font-bold text-foreground">Orders</h2>
+              <Button variant="outline" size="sm" onClick={fetchOrders}>
+                Refresh
+              </Button>
+            </div>
+
+            {orders.length === 0 ? (
+              <div className="text-center py-12">
+                <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground text-lg">No orders yet</p>
+                <p className="text-muted-foreground">Orders will appear here when customers place them</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {orders.map((order) => (
+                  <Card key={order.id} className="border-border">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="font-bold text-foreground text-lg">
+                              {order.order_number}
+                            </h3>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                              order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                              order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
+                              order.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
+                              order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {order.status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            <span className="font-medium text-foreground">{order.customer_name}</span> — {order.customer_phone}
+                          </p>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {order.customer_address}
+                          </p>
+                          <div className="text-sm text-muted-foreground">
+                            {(order.items || []).map((item, i) => (
+                              <span key={i}>
+                                {item.productName || item.productId} x{item.quantity}
+                                {i < (order.items || []).length - 1 ? ', ' : ''}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {new Date(order.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <p className="text-xl font-bold text-primary">
+                            TK {order.total_amount?.toFixed(2)}
+                          </p>
+                          <div className="flex gap-2 flex-wrap">
+                            {order.status === 'pending' && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => updateOrderStatus(order.id, 'confirmed')}>
+                                  Confirm
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => updateOrderStatus(order.id, 'cancelled')}>
+                                  Cancel
+                                </Button>
+                              </>
+                            )}
+                            {order.status === 'confirmed' && (
+                              <Button size="sm" variant="outline" onClick={() => updateOrderStatus(order.id, 'shipped')}>
+                                Mark Shipped
+                              </Button>
+                            )}
+                            {order.status === 'shipped' && (
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => updateOrderStatus(order.id, 'delivered')}>
+                                Mark Delivered
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
