@@ -290,12 +290,18 @@ export default function Home() {
               {filteredProducts.map((product) => (
                 <Link key={product.id} href={`/product/${product.id}`}>
                   <Card className="hover:shadow-lg hover:border-primary transition-all h-full flex flex-col cursor-pointer">
+                    {product.image_url ? (
+                      <div className="h-40 rounded-t-lg overflow-hidden">
+                        <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
                     <div className="bg-gradient-to-br from-primary/5 to-accent/5 h-40 flex items-center justify-center rounded-t-lg">
                       <div className="text-center">
                         <Leaf className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
                         <p className="text-xs text-muted-foreground">Product Image</p>
                       </div>
                     </div>
+                    )}
                     <CardContent className="flex-1 pt-4 flex flex-col">
                       <h3 className="font-bold text-lg mb-2 line-clamp-2">
                         {product.name}

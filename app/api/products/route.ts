@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, price, description, imageData, stock } = body;
+    const { name, price, description, imageUrl, imageData, stock } = body;
 
     if (!name || price === undefined || !description) {
       return NextResponse.json(
@@ -26,21 +26,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert base64 image to Buffer if provided
-    let imageBuffer = null;
-    if (imageData && typeof imageData === 'string') {
-      try {
-        imageBuffer = Buffer.from(imageData, 'base64');
-      } catch (e) {
-        console.warn('Invalid image data provided');
-      }
-    }
-
     const product = await createProduct(
       name,
       parseFloat(price),
       description,
-      imageBuffer,
+      imageUrl || imageData || '',
       parseInt(stock) || 100
     );
 
