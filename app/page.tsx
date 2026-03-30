@@ -12,7 +12,8 @@ interface Product {
   name: string;
   price: number;
   description: string;
-  image_data?: Buffer;
+  image_url?: string;
+  images?: string[];
   stock: number;
   created_at?: string;
 }
@@ -133,7 +134,7 @@ export default function Home() {
       if (existingItem) {
         existingItem.quantity += 1;
       } else {
-        cart.push({ _id: productId, name: product.name, price: product.price, imageUrl: (product as any).image_url || (product as any).imageUrl, quantity: 1 });
+        cart.push({ _id: productId, name: product.name, price: product.price, imageUrl: product.images?.[0] || (product as any).image_url || (product as any).imageUrl, quantity: 1 });
       }
       localStorage.setItem('cart', JSON.stringify(cart));
       setCartCount(cart.length);
@@ -290,9 +291,9 @@ export default function Home() {
               {filteredProducts.map((product) => (
                 <Link key={product.id} href={`/product/${product.id}`}>
                   <Card className="hover:shadow-lg hover:border-primary transition-all h-full flex flex-col cursor-pointer">
-                    {product.image_url ? (
+                    {(product.images?.[0] || product.image_url) ? (
                       <div className="h-40 rounded-t-lg overflow-hidden">
-                        <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                        <img src={product.images?.[0] || product.image_url} alt={product.name} className="w-full h-full object-cover" />
                       </div>
                     ) : (
                     <div className="bg-gradient-to-br from-primary/5 to-accent/5 h-40 flex items-center justify-center rounded-t-lg">

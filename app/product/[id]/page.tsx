@@ -4,15 +4,18 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ShoppingBag, ArrowLeft } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Product {
-  _id: string;
+  id: string;
+  _id?: string;
   name: string;
   price: number;
   description: string;
   imageUrl?: string;
+  image_url?: string;
+  images?: string[];
   stock: number;
 }
 
@@ -24,6 +27,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     fetchProduct();
@@ -33,8 +37,9 @@ export default function ProductDetailPage() {
     try {
       const response = await fetch(`/api/products/${id}`);
       if (response.ok) {
-        const data = await response.json();
-        setProduct(data);
+        const result = await response.json();
+        const productData = result.data || result;
+        setProduct(productData);
       } else {
         router.push('/');
       }
@@ -53,17 +58,20 @@ export default function ProductDetailPage() {
     const cartJSON = localStorage.getItem('cart');
     const cart = cartJSON ? JSON.parse(cartJSON) : [];
 
+    const productId = product._id || product.id;
+    const productImage = product.images?.[0] || product.image_url || product.imageUrl;
+
     // Check if product already in cart
-    const existingItem = cart.find((item: any) => item._id === product._id);
+    const existingItem = cart.find((item: any) => item._id === productId);
 
     if (existingItem) {
       existingItem.quantity += quantity;
     } else {
       cart.push({
-        _id: product._id,
+        _id: productId,
         name: product.name,
         price: product.price,
-        imageUrl: product.imageUrl,
+        imageUrl: productImage,
         quantity,
       });
     }
@@ -135,19 +143,92 @@ export default function ProductDetailPage() {
       {/* Product Details */}
       <section className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Image */}
-          <div className="flex items-center justify-center">
-            {product.imageUrl ? (
-              <img
-                src={product.imageUrl}
-                alt={product.name}
-                className="max-w-full h-auto rounded-lg object-cover"
-              />
-            ) : (
-              <div className="w-full h-96 bg-secondary rounded-lg flex items-center justify-center">
-                <ShoppingBag className="w-16 h-16 text-muted-foreground" />
-              </div>
-            )}
+          {/* Image Gallery */}
+          <div className="flex flex-col gap-4">
+            {/* Main Image */}
+            <div className="flex items-center justify-center relative">
+              {(() => {
+                const allImages = product.images && product.images.length > 0
+                  ? product.images
+                  : product.image_url
+                    ? [product.image_url]
+                    : product.imageUrl
+                      ? [product.imageUrl]
+                      : [];
+
+                if (allImages.length > 0) {
+                  return (
+                    <>
+                      <img
+                        src={allImages[selectedImageIndex] || allImages[0]}
+                        alt={product.name}
+                        className="max-w-full h-auto max-h-[450px] rounded-lg object-contain"
+                      />
+                      {allImages.length > 1 && (
+                        <>
+                          <button
+                            onClick={() => setSelectedImageIndex(Math.max(0, selectedImageIndex - 1))}
+                            disabled={selectedImageIndex === 0}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background border border-border rounded-full p-1 disabled:opacity-30"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setSelectedImageIndex(Math.min(allImages.length - 1, selectedImageIndex + 1))}
+                            disabled={selectedImageIndex === allImages.length - 1}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background border border-border rounded-full p-1 disabled:opacity-30"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                    </>
+                  );
+                }
+
+                return (
+                  <div className="w-full h-96 bg-secondary rounded-lg flex items-center justify-center">
+                    <ShoppingBag className="w-16 h-16 text-muted-foreground" />
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Thumbnails */}
+            {(() => {
+              const allImages = product.images && product.images.length > 0
+                ? product.images
+                : product.image_url
+                  ? [product.image_url]
+                  : product.imageUrl
+                    ? [product.imageUrl]
+                    : [];
+
+              if (allImages.length > 1) {
+                return (
+                  <div className="flex gap-2 justify-center">
+                    {allImages.map((img, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedImageIndex(index)}
+                        className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
+                          selectedImageIndex === index
+                            ? 'border-primary'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <img
+                          src={img}
+                          alt={`${product.name} ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* Details */}

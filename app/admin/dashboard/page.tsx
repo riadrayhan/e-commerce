@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AdminProtected } from '@/components/admin-protected';
 import { toast } from 'sonner';
-import { Trash2, Edit2, Plus, LogOut, Package, Eye } from 'lucide-react';
+import { Trash2, Edit2, Plus, LogOut, Package, Eye, Upload, X as XIcon, ImageIcon } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -16,6 +16,7 @@ interface Product {
   price: number;
   description: string;
   image_url?: string;
+  images?: string[];
   stock: number;
   created_at?: string;
 }
@@ -44,9 +45,12 @@ function AdminDashboardContent() {
     name: '',
     price: '',
     description: '',
-    image_url: '',
     stock: '100',
   });
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -106,11 +110,38 @@ function AdminDashboardContent() {
     }
 
     try {
+      setUploading(true);
+
+      // Upload new images if any
+      let uploadedUrls: string[] = [];
+      if (imageFiles.length > 0) {
+        const uploadFormData = new FormData();
+        imageFiles.forEach((file) => uploadFormData.append('files', file));
+
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: uploadFormData,
+        });
+
+        if (!uploadResponse.ok) {
+          const err = await uploadResponse.json();
+          toast.error(err.error || 'Failed to upload images');
+          setUploading(false);
+          return;
+        }
+
+        const uploadResult = await uploadResponse.json();
+        uploadedUrls = uploadResult.urls || [];
+      }
+
+      // Combine existing images with newly uploaded ones
+      const allImages = [...existingImages, ...uploadedUrls];
+
       const payload = {
         name: formData.name,
         price: parseFloat(formData.price),
         description: formData.description,
-        imageUrl: formData.image_url,
+        images: allImages,
         stock: parseInt(formData.stock),
       };
 
@@ -147,6 +178,8 @@ function AdminDashboardContent() {
     } catch (error) {
       console.error('Error submitting form:', error);
       toast.error('An error occurred');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -155,9 +188,11 @@ function AdminDashboardContent() {
       name: product.name,
       price: product.price.toString(),
       description: product.description,
-      image_url: product.image_url || '',
       stock: product.stock.toString(),
     });
+    setExistingImages(product.images || (product.image_url ? [product.image_url] : []));
+    setImageFiles([]);
+    setImagePreviews([]);
     setEditingId(product.id);
     setShowForm(true);
   };
@@ -187,9 +222,11 @@ function AdminDashboardContent() {
       name: '',
       price: '',
       description: '',
-      image_url: '',
       stock: '100',
     });
+    setImageFiles([]);
+    setImagePreviews([]);
+    setExistingImages([]);
     setEditingId(null);
     setShowForm(false);
   };
@@ -329,18 +366,102 @@ function AdminDashboardContent() {
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Image URL
+                    Product Images (Max 4)
                   </label>
-                  <Input
-                    type="url"
-                    placeholder="https://example.com/image.jpg"
-                    value={formData.image_url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, image_url: e.target.value })
-                    }
-                  />
+
+                  {/* Existing images (when editing) */}
+                  {existingImages.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-2">Current Images:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {existingImages.map((url, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={url}
+                              alt={`Existing ${index + 1}`}
+                              className="w-20 h-20 object-cover rounded-lg border border-border"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExistingImages(existingImages.filter((_, i) => i !== index));
+                              }}
+                              className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* New image previews */}
+                  {imagePreviews.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-2">New Images to Upload:</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {imagePreviews.map((url, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={url}
+                              alt={`Preview ${index + 1}`}
+                              className="w-20 h-20 object-cover rounded-lg border border-border"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newFiles = imageFiles.filter((_, i) => i !== index);
+                                const newPreviews = imagePreviews.filter((_, i) => i !== index);
+                                setImageFiles(newFiles);
+                                setImagePreviews(newPreviews);
+                              }}
+                              className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upload button */}
+                  {(existingImages.length + imageFiles.length) < 4 && (
+                    <label className="flex items-center justify-center gap-2 border-2 border-dashed border-border rounded-lg p-4 cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        Click to upload images ({existingImages.length + imageFiles.length}/4)
+                      </span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          const totalAllowed = 4 - existingImages.length - imageFiles.length;
+                          const newFiles = files.slice(0, totalAllowed);
+
+                          if (files.length > totalAllowed) {
+                            toast.error(`You can only add ${totalAllowed} more image(s)`);
+                          }
+
+                          // Generate previews
+                          const previews: string[] = [];
+                          newFiles.forEach((file) => {
+                            previews.push(URL.createObjectURL(file));
+                          });
+
+                          setImageFiles([...imageFiles, ...newFiles]);
+                          setImagePreviews([...imagePreviews, ...previews]);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    Use HTTPS image URLs. For testing, use: https://via.placeholder.com/200
+                    Supported: JPEG, PNG, WebP, GIF. Max 5MB per file.
                   </p>
                 </div>
 
@@ -348,13 +469,15 @@ function AdminDashboardContent() {
                   <Button
                     type="submit"
                     className="bg-primary hover:bg-primary/90"
+                    disabled={uploading}
                   >
-                    {editingId ? 'Update' : 'Add'} Product
+                    {uploading ? 'Uploading...' : (editingId ? 'Update' : 'Add')} Product
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={resetForm}
+                    disabled={uploading}
                   >
                     Cancel
                   </Button>
@@ -368,12 +491,18 @@ function AdminDashboardContent() {
           {products.map((product) => (
             <Card key={product.id} className="border-border">
               <CardContent className="pt-4">
-                {product.image_url && (
+                {(product.images?.[0] || product.image_url) && (
                   <img
-                    src={product.image_url}
+                    src={product.images?.[0] || product.image_url}
                     alt={product.name}
                     className="w-full h-40 object-cover rounded-lg mb-3"
                   />
+                )}
+                {product.images && product.images.length > 1 && (
+                  <p className="text-xs text-muted-foreground mb-2">
+                    <ImageIcon className="w-3 h-3 inline mr-1" />
+                    {product.images.length} images
+                  </p>
                 )}
                 <h3 className="font-semibold text-foreground mb-1">
                   {product.name}

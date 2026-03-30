@@ -16,3 +16,11 @@ node_modules
 .next/
 .DS_Store
 .vercel
+tsconfig.tsbuildinfo
+
+# Uploaded images (generated at runtime)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Local data files (runtime generated)
+data/orders.json

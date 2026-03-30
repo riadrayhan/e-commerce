@@ -33,7 +33,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, price, description, imageUrl, stock } = body;
+    const { name, price, description, images, imageUrl, stock } = body;
 
     if (!name || !price || !description) {
       return NextResponse.json(
@@ -42,7 +42,10 @@ export async function PUT(
       );
     }
 
-    const product = await updateProduct(id, name, price, description, imageUrl || '', stock || 100);
+    // Support both new (images array) and old (imageUrl) formats
+    const imageList = Array.isArray(images) ? images : (imageUrl ? [imageUrl] : []);
+
+    const product = await updateProduct(id, name, price, description, imageList, stock || 100);
 
     if (!product) {
       return NextResponse.json(

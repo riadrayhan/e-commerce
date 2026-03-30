@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, price, description, imageUrl, imageData, stock } = body;
+    const { name, price, description, images, imageUrl, imageData, stock } = body;
 
     if (!name || price === undefined || !description) {
       return NextResponse.json(
@@ -26,11 +26,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Support both new (images array) and old (imageUrl/imageData) formats
+    const imageList = Array.isArray(images) ? images : (imageUrl || imageData ? [imageUrl || imageData] : []);
+
     const product = await createProduct(
       name,
       parseFloat(price),
       description,
-      imageUrl || imageData || '',
+      imageList,
       parseInt(stock) || 100
     );
 
