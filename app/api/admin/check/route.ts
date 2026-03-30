@@ -18,14 +18,12 @@ export async function GET(request: NextRequest) {
       jwt.verify(token, JWT_SECRET);
       return NextResponse.json({ authenticated: true }, { status: 200 });
     } catch (verifyError) {
-      // Token invalid - clear cookie
       const response = NextResponse.json(
         { authenticated: false },
         { status: 401 }
       );
       response.cookies.delete('adminToken');
       return response;
-    }
     }
   } catch (error) {
     console.error('Auth check error:', error);
