@@ -20,10 +20,14 @@ export default function AdminLoginPage() {
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ password }),
       });
 
       if (response.ok) {
+        const data = await response.json();
+        // Also store token in cookie via JS as backup
+        document.cookie = `adminToken=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
         toast.success('Login successful!');
         router.push('/admin/dashboard');
       } else {
