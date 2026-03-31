@@ -1,125 +1,107 @@
-// Persistent data store
-// Uses JSON files on disk for reliable local development
-// Uses Upstash Redis in production (via UPSTASH_REDIS_REST_URL env var)
-
-import { Redis } from '@upstash/redis';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+// SQLite database for reliable storage (handles 1000+ users)
+import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
-const demoProducts = [
-  { id: '1', name: 'Fresh Organic Milk', price: 65, description: 'Farm-fresh organic whole milk, 1 liter. Rich in calcium and protein.', images: ['https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400'], image_url: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400', stock: 50, created_at: '2026-03-25T10:00:00.000Z' },
-  { id: '2', name: 'Whole Wheat Bread', price: 45, description: 'Freshly baked whole wheat bread, perfect for breakfast and sandwiches.', images: ['https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400'], image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400', stock: 100, created_at: '2026-03-25T10:01:00.000Z' },
-  { id: '3', name: 'Free Range Eggs (12 pcs)', price: 120, description: 'Premium free-range eggs from local farms. Pack of 12.', images: ['https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400'], image_url: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400', stock: 75, created_at: '2026-03-25T10:02:00.000Z' },
-  { id: '4', name: 'Basmati Rice (5kg)', price: 350, description: 'Premium aged basmati rice, long grain. Perfect for biryani and pulao.', images: ['https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400'], image_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400', stock: 40, created_at: '2026-03-25T10:03:00.000Z' },
-  { id: '5', name: 'Fresh Tomatoes (1kg)', price: 30, description: 'Locally sourced ripe tomatoes, perfect for cooking and salads.', images: ['https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400'], image_url: 'https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400', stock: 200, created_at: '2026-03-25T10:04:00.000Z' },
-  { id: '6', name: 'Cooking Oil (1L)', price: 180, description: 'Pure refined soybean cooking oil for everyday use.', images: ['https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400'], image_url: 'https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400', stock: 60, created_at: '2026-03-25T10:05:00.000Z' },
-];
+const DB_PATH = path.join(process.cwd(), 'data', 'store.db');
 
-// --- Storage layer ---
-const USE_REDIS = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+// Ensure data directory exists
+const dataDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
 
-let redis: Redis | null = null;
-function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+let _db: Database.Database | null = null;
+
+function getDb(): Database.Database {
+  if (!_db) {
+    _db = new Database(DB_PATH);
+    _db.pragma('journal_mode = WAL');
+    _db.pragma('foreign_keys = ON');
+    initializeDatabase(_db);
+  }
+  return _db;
+}
+
+function initializeDatabase(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS products (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      price REAL NOT NULL,
+      description TEXT NOT NULL,
+      images TEXT DEFAULT '[]',
+      image_url TEXT DEFAULT '',
+      stock INTEGER DEFAULT 100,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      order_number TEXT UNIQUE NOT NULL,
+      customer_name TEXT NOT NULL,
+      customer_phone TEXT NOT NULL,
+      customer_address TEXT NOT NULL,
+      items TEXT NOT NULL,
+      total_amount REAL NOT NULL,
+      status TEXT DEFAULT 'pending',
+      status_message TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      customer_phone TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (order_id) REFERENCES orders(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
+    CREATE INDEX IF NOT EXISTS idx_notifications_phone ON notifications(customer_phone);
+    CREATE INDEX IF NOT EXISTS idx_notifications_order ON notifications(order_id);
+  `);
+
+  // Seed demo products if table is empty
+  const count = db.prepare('SELECT COUNT(*) as count FROM products').get() as { count: number };
+  if (count.count === 0) {
+    const insert = db.prepare(
+      'INSERT INTO products (id, name, price, description, images, image_url, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    const demoProducts = [
+      { id: '1', name: 'Fresh Organic Milk', price: 65, description: 'Farm-fresh organic whole milk, 1 liter. Rich in calcium and protein.', images: ['https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400'], stock: 50 },
+      { id: '2', name: 'Whole Wheat Bread', price: 45, description: 'Freshly baked whole wheat bread, perfect for breakfast and sandwiches.', images: ['https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400'], stock: 100 },
+      { id: '3', name: 'Free Range Eggs (12 pcs)', price: 120, description: 'Premium free-range eggs from local farms. Pack of 12.', images: ['https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400'], stock: 75 },
+      { id: '4', name: 'Basmati Rice (5kg)', price: 350, description: 'Premium aged basmati rice, long grain. Perfect for biryani and pulao.', images: ['https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400'], stock: 40 },
+      { id: '5', name: 'Fresh Tomatoes (1kg)', price: 30, description: 'Locally sourced ripe tomatoes, perfect for cooking and salads.', images: ['https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400'], stock: 200 },
+      { id: '6', name: 'Cooking Oil (1L)', price: 180, description: 'Pure refined soybean cooking oil for everyday use.', images: ['https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400'], stock: 60 },
+    ];
+
+    const insertMany = db.transaction((products: typeof demoProducts) => {
+      for (const p of products) {
+        insert.run(p.id, p.name, p.price, p.description, JSON.stringify(p.images), p.images[0], p.stock, new Date().toISOString());
+      }
     });
-  }
-  return redis;
-}
-
-// --- JSON File-based persistent storage for local development ---
-const DATA_DIR = path.join(process.cwd(), 'data');
-const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
-const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
-
-function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
+    insertMany(demoProducts);
   }
 }
 
-function readJsonFile(filePath: string, defaultData: any[] = []): any[] {
-  try {
-    if (existsSync(filePath)) {
-      const raw = readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : defaultData;
-    }
-  } catch (error) {
-    console.error(`Error reading ${filePath}:`, error);
-  }
-  return defaultData;
-}
+// --- Product operations ---
 
-function writeJsonFile(filePath: string, data: any[]) {
-  try {
-    ensureDataDir();
-    writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (error) {
-    console.error(`Error writing ${filePath}:`, error);
-  }
-}
-
-// Initialize data files if they don't exist
-function initDataFiles() {
-  ensureDataDir();
-  if (!existsSync(PRODUCTS_FILE)) {
-    writeJsonFile(PRODUCTS_FILE, demoProducts);
-  }
-  if (!existsSync(ORDERS_FILE)) {
-    writeJsonFile(ORDERS_FILE, []);
-  }
-}
-
-initDataFiles();
-
-async function loadProducts(): Promise<any[]> {
-  if (USE_REDIS) {
-    const data = await getRedis().get<any[]>('products');
-    if (!data) {
-      await getRedis().set('products', demoProducts);
-      return [...demoProducts];
-    }
-    return data;
-  }
-  return readJsonFile(PRODUCTS_FILE, demoProducts);
-}
-
-async function saveProducts(products: any[]) {
-  if (USE_REDIS) {
-    await getRedis().set('products', products);
-  } else {
-    writeJsonFile(PRODUCTS_FILE, products);
-  }
-}
-
-async function loadOrders(): Promise<any[]> {
-  if (USE_REDIS) {
-    const data = await getRedis().get<any[]>('orders');
-    return data || [];
-  }
-  return readJsonFile(ORDERS_FILE, []);
-}
-
-async function saveOrders(orders: any[]) {
-  if (USE_REDIS) {
-    await getRedis().set('orders', orders);
-  } else {
-    writeJsonFile(ORDERS_FILE, orders);
-  }
-}
-
-// Product operations
 export async function getProducts() {
-  const products = await loadProducts();
-  return products.filter((p: any) => p.stock > 0);
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM products WHERE stock > 0 ORDER BY created_at DESC').all() as any[];
+  return rows.map(parseProduct);
 }
 
 export async function getProductById(id: string) {
-  const products = await loadProducts();
-  return products.find((p: any) => p.id === id);
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
+  return row ? parseProduct(row) : null;
 }
 
 export async function createProduct(
@@ -129,20 +111,14 @@ export async function createProduct(
   images: string[],
   stock: number
 ) {
-  const products = await loadProducts();
-  const product = {
-    id: String(Date.now()),
-    name,
-    price,
-    description,
-    images: images || [],
-    image_url: images?.[0] || '',
-    stock,
-    created_at: new Date().toISOString(),
-  };
-  products.unshift(product);
-  await saveProducts(products);
-  return product;
+  const db = getDb();
+  const id = String(Date.now());
+  const imageList = images || [];
+  db.prepare(
+    'INSERT INTO products (id, name, price, description, images, image_url, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, name, price, description, JSON.stringify(imageList), imageList[0] || '', stock, new Date().toISOString());
+
+  return { id, name, price, description, images: imageList, image_url: imageList[0] || '', stock, created_at: new Date().toISOString() };
 }
 
 export async function updateProduct(
@@ -153,79 +129,143 @@ export async function updateProduct(
   images: string[],
   stock: number
 ) {
-  const products = await loadProducts();
-  const index = products.findIndex((p: any) => p.id === id);
-  if (index === -1) return null;
-  const existingImages = products[index].images || (products[index].image_url ? [products[index].image_url] : []);
+  const db = getDb();
+  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
+  if (!existing) return null;
+
+  const existingImages = safeJsonParse(existing.images, existing.image_url ? [existing.image_url] : []);
   const newImages = images && images.length > 0 ? images : existingImages;
-  products[index] = {
-    ...products[index],
-    name,
-    price,
-    description,
-    images: newImages,
-    image_url: newImages[0] || '',
-    stock,
-  };
-  await saveProducts(products);
-  return products[index];
+
+  db.prepare(
+    'UPDATE products SET name = ?, price = ?, description = ?, images = ?, image_url = ?, stock = ? WHERE id = ?'
+  ).run(name, price, description, JSON.stringify(newImages), newImages[0] || '', stock, id);
+
+  return { id, name, price, description, images: newImages, image_url: newImages[0] || '', stock, created_at: existing.created_at };
 }
 
 export async function deleteProduct(id: string) {
-  const products = await loadProducts();
-  const index = products.findIndex((p: any) => p.id === id);
-  if (index === -1) return null;
-  const deleted = products.splice(index, 1);
-  await saveProducts(products);
-  return deleted[0];
+  const db = getDb();
+  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
+  if (!existing) return null;
+  db.prepare('DELETE FROM products WHERE id = ?').run(id);
+  return parseProduct(existing);
 }
 
-// Order operations
+// --- Order operations ---
+
 export async function createOrder(
   customerName: string,
   customerPhone: string,
   customerAddress: string,
-  items: Array<{ productId: string; quantity: number; price: number }>,
+  items: Array<{ productId: string; productName?: string; quantity: number; price: number }>,
   totalAmount: number,
   status: string = 'pending'
 ) {
-  const orders = await loadOrders();
-  const order = {
-    id: String(Date.now()),
-    order_number: `ORD-${Date.now()}`,
-    customer_name: customerName,
-    customer_phone: customerPhone,
-    customer_address: customerAddress,
-    items,
-    total_amount: totalAmount,
-    status,
+  const db = getDb();
+  const id = String(Date.now());
+  const orderNumber = `ORD-${Date.now()}`;
+
+  db.prepare(
+    'INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_address, items, total_amount, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, orderNumber, customerName, customerPhone, customerAddress, JSON.stringify(items), totalAmount, status, new Date().toISOString(), new Date().toISOString());
+
+  return {
+    id, order_number: orderNumber, customer_name: customerName, customer_phone: customerPhone,
+    customer_address: customerAddress, items, total_amount: totalAmount, status, status_message: '',
     created_at: new Date().toISOString(),
   };
-  orders.unshift(order);
-  await saveOrders(orders);
-  return order;
 }
 
 export async function getOrderById(id: string) {
-  const orders = await loadOrders();
-  return orders.find((o: any) => o.id === id);
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
+  return row ? parseOrder(row) : null;
 }
 
-export async function getOrders(limit: number = 50) {
-  const orders = await loadOrders();
-  return orders.slice(0, limit);
+export async function getOrders(limit: number = 100) {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
+  return rows.map(parseOrder);
+}
+
+export async function getOrdersByPhone(phone: string) {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM orders WHERE customer_phone = ? ORDER BY created_at DESC').all(phone) as any[];
+  return rows.map(parseOrder);
 }
 
 export async function updateOrderStatus(id: string, status: string) {
-  const orders = await loadOrders();
-  const index = orders.findIndex((o: any) => o.id === id);
-  if (index === -1) return null;
-  orders[index].status = status;
-  orders[index].updated_at = new Date().toISOString();
-  await saveOrders(orders);
-  return orders[index];
+  const db = getDb();
+  const existing = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
+  if (!existing) return null;
+
+  const statusMessages: Record<string, string> = {
+    confirmed: '✅ Your order has been approved and confirmed! It will be processed soon.',
+    shipped: '🚚 Your order has been shipped! It is on the way to your address.',
+    delivered: '📦 Your order has been delivered! Thank you for shopping with us.',
+    cancelled: '❌ Your order has been cancelled. Please contact support for details.',
+  };
+
+  const message = statusMessages[status] || `Order status updated to: ${status}`;
+
+  db.prepare(
+    'UPDATE orders SET status = ?, status_message = ?, updated_at = ? WHERE id = ?'
+  ).run(status, message, new Date().toISOString(), id);
+
+  // Create notification for the customer
+  const notifId = `notif-${Date.now()}`;
+  db.prepare(
+    'INSERT INTO notifications (id, order_id, customer_phone, message, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(notifId, id, existing.customer_phone, message, new Date().toISOString());
+
+  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
+  return parseOrder(updated);
+}
+
+// --- Notification operations ---
+
+export async function getNotificationsByPhone(phone: string) {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT n.*, o.order_number FROM notifications n JOIN orders o ON n.order_id = o.id WHERE n.customer_phone = ? ORDER BY n.created_at DESC'
+  ).all(phone) as any[];
+  return rows;
+}
+
+export async function getNotificationsByOrderId(orderId: string) {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT * FROM notifications WHERE order_id = ? ORDER BY created_at DESC'
+  ).all(orderId) as any[];
+  return rows;
+}
+
+export async function markNotificationsRead(phone: string) {
+  const db = getDb();
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE customer_phone = ?').run(phone);
 }
 
 export async function verifyAdminPassword(password: string): Promise<boolean> {
   return password === (process.env.ADMIN_PASSWORD || 'admin');
+}
+
+// --- Helpers ---
+
+function safeJsonParse(str: string, fallback: any[] = []): any[] {
+  try { return JSON.parse(str); } catch { return fallback; }
+}
+
+function parseProduct(row: any) {
+  return {
+    ...row,
+    images: safeJsonParse(row.images, row.image_url ? [row.image_url] : []),
+  };
+}
+
+function parseOrder(row: any) {
+  return {
+    ...row,
+    items: safeJsonParse(row.items, []),
+    total_amount: row.total_amount,
+  };
 }

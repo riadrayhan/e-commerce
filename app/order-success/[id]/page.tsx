@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ShoppingBag, Check, Package } from 'lucide-react';
+import { ShoppingBag, Check, Package, Bell } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Order {
   id: string;
@@ -19,6 +20,7 @@ interface Order {
   customer_address: string;
   total_amount: number;
   status: string;
+  status_message?: string;
   created_at: string;
 }
 
@@ -27,9 +29,13 @@ export default function OrderSuccessPage() {
   const id = params.id as string;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const prevStatusRef = useRef<string>('');
 
   useEffect(() => {
     fetchOrder();
+    // Poll for order status updates every 15 seconds
+    const interval = setInterval(fetchOrder, 15000);
+    return () => clearInterval(interval);
   }, [id]);
 
   const fetchOrder = async () => {
@@ -37,7 +43,18 @@ export default function OrderSuccessPage() {
       const response = await fetch(`/api/orders/${id}`);
       if (response.ok) {
         const result = await response.json();
-        setOrder(result.data || result);
+        const orderData = result.data || result;
+
+        // Show notification if status changed
+        if (prevStatusRef.current && prevStatusRef.current !== orderData.status) {
+          if (orderData.status_message) {
+            toast.success(orderData.status_message, { duration: 8000 });
+          } else {
+            toast.success(`Your order status has been updated to: ${orderData.status}`);
+          }
+        }
+        prevStatusRef.current = orderData.status;
+        setOrder(orderData);
       }
     } catch (error) {
       console.error('Error fetching order:', error);
@@ -128,9 +145,21 @@ export default function OrderSuccessPage() {
 
               <div className="pb-3 border-b border-border">
                 <p className="text-sm text-muted-foreground">Status</p>
-                <p className="text-lg font-semibold text-yellow-600 capitalize">
+                <p className={`text-lg font-semibold capitalize ${
+                  order.status === 'confirmed' ? 'text-green-600' :
+                  order.status === 'shipped' ? 'text-blue-600' :
+                  order.status === 'delivered' ? 'text-emerald-600' :
+                  order.status === 'cancelled' ? 'text-red-600' :
+                  'text-yellow-600'
+                }`}>
                   {order.status}
                 </p>
+                {order.status_message && (
+                  <p className="text-sm text-primary mt-1 flex items-center gap-1">
+                    <Bell className="w-3 h-3" />
+                    {order.status_message}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -210,33 +239,37 @@ export default function OrderSuccessPage() {
           <ul className="space-y-2 text-muted-foreground">
             <li className="flex gap-2">
               <span className="text-primary font-bold">1.</span>
-              <span>You will receive a confirmation call on {order.customer_phone}</span>
+              <span>Your order is being reviewed by our admin team</span>
             </li>
             <li className="flex gap-2">
               <span className="text-primary font-bold">2.</span>
-              <span>Your order will be processed within 24 hours</span>
+              <span>Once approved, you will receive a notification here and on the Track Order page</span>
             </li>
             <li className="flex gap-2">
               <span className="text-primary font-bold">3.</span>
-              <span>Expected delivery: 3-5 business days</span>
+              <span>You can track your order anytime using your phone number ({order.customer_phone})</span>
             </li>
             <li className="flex gap-2">
               <span className="text-primary font-bold">4.</span>
-              <span>Payment will be collected at the time of delivery</span>
+              <span>Payment will be collected at the time of delivery (Cash on Delivery)</span>
             </li>
           </ul>
+          <p className="text-xs text-muted-foreground mt-3">
+            This page automatically checks for updates every 15 seconds.
+          </p>
         </div>
 
         {/* CTA Buttons */}
-        <div className="flex gap-4 justify-center">
+        <div className="flex gap-4 justify-center flex-wrap">
           <Link href="/">
             <Button className="bg-primary hover:bg-primary/90 h-11">
               Continue Shopping
             </Button>
           </Link>
-          <Link href="/admin/login">
+          <Link href="/track-order">
             <Button variant="outline" className="h-11">
-              Track Orders (Admin)
+              <Package className="w-4 h-4 mr-2" />
+              Track Orders
             </Button>
           </Link>
         </div>

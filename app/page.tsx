@@ -176,6 +176,11 @@ export default function Home() {
 
             {/* Admin & Cart Links */}
             <div className="flex items-center gap-3">
+              <Link href="/track-order">
+                <Button variant="outline" size="sm">
+                  Track Order
+                </Button>
+              </Link>
               <Link href="/admin/login">
                 <Button variant="outline" size="sm">
                   Admin
@@ -361,7 +366,7 @@ export default function Home() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link href="/" className="hover:text-foreground">Contact Us</Link></li>
                 <li><Link href="/" className="hover:text-foreground">FAQ</Link></li>
-                <li><Link href="/" className="hover:text-foreground">Track Order</Link></li>
+                <li><Link href="/track-order" className="hover:text-foreground">Track Order</Link></li>
               </ul>
             </div>
             <div>

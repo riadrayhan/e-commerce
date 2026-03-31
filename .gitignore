@@ -24,3 +24,6 @@ public/uploads/*
 
 # Local data files (runtime generated)
 data/orders.json
+data/store.db
+data/store.db-wal
+data/store.db-shm

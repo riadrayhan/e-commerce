@@ -90,7 +90,13 @@ function AdminDashboardContent() {
         body: JSON.stringify({ status }),
       });
       if (response.ok) {
-        toast.success(`Order status updated to ${status}`);
+        const statusLabels: Record<string, string> = {
+          confirmed: 'approved/confirmed',
+          shipped: 'shipped',
+          delivered: 'delivered',
+          cancelled: 'cancelled',
+        };
+        toast.success(`Order ${statusLabels[status] || status}! Customer has been notified.`);
         fetchOrders();
       } else {
         toast.error('Failed to update order status');
