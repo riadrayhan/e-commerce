@@ -11,16 +11,17 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-let _db: Database.Database | null = null;
+// Use globalThis to persist the DB connection across Next.js hot reloads
+const globalForDb = globalThis as unknown as { __sqlite_db?: Database.Database };
 
 function getDb(): Database.Database {
-  if (!_db) {
-    _db = new Database(DB_PATH);
-    _db.pragma('journal_mode = WAL');
-    _db.pragma('foreign_keys = ON');
-    initializeDatabase(_db);
+  if (!globalForDb.__sqlite_db) {
+    globalForDb.__sqlite_db = new Database(DB_PATH);
+    globalForDb.__sqlite_db.pragma('journal_mode = WAL');
+    globalForDb.__sqlite_db.pragma('foreign_keys = ON');
+    initializeDatabase(globalForDb.__sqlite_db);
   }
-  return _db;
+  return globalForDb.__sqlite_db;
 }
 
 function initializeDatabase(db: Database.Database) {

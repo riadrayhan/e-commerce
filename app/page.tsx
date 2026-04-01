@@ -238,14 +238,7 @@ export default function Home() {
               <p className="text-lg text-muted-foreground mb-8">
                 Shop daily necessities with the best prices. Fast delivery, guaranteed quality, and 24/7 customer support.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" className="w-full sm:w-auto">
-                  Start Shopping <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                  Learn More
-                </Button>
-              </div>
+
               <div className="mt-8 grid grid-cols-3 gap-4 sm:gap-6">
                 <div>
                   <div className="text-2xl font-bold text-primary">50K+</div>
