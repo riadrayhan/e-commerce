@@ -5,7 +5,9 @@ let _sql: NeonQueryFunction<false, false> | null = null;
 
 function getSql() {
   if (!_sql) {
-    _sql = neon(process.env.DATABASE_URL_UNPOOLED!);
+    const connStr = (process.env.DATABASE_URL_UNPOOLED || '').trim();
+    if (!connStr) throw new Error('DATABASE_URL_UNPOOLED is not set');
+    _sql = neon(connStr);
   }
   return _sql;
 }
