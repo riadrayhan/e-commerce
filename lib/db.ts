@@ -1,42 +1,26 @@
-// SQLite database for reliable storage (handles 1000+ users)
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+// Neon PostgreSQL database for Vercel deployment
+import { neon } from '@neondatabase/serverless';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'store.db');
+const sql = neon(process.env.DATABASE_URL_UNPOOLED!);
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+let _initialized = false;
 
-// Use globalThis to persist the DB connection across Next.js hot reloads
-const globalForDb = globalThis as unknown as { __sqlite_db?: Database.Database };
+async function ensureTables() {
+  if (_initialized) return;
 
-function getDb(): Database.Database {
-  if (!globalForDb.__sqlite_db) {
-    globalForDb.__sqlite_db = new Database(DB_PATH);
-    globalForDb.__sqlite_db.pragma('journal_mode = WAL');
-    globalForDb.__sqlite_db.pragma('foreign_keys = ON');
-    initializeDatabase(globalForDb.__sqlite_db);
-  }
-  return globalForDb.__sqlite_db;
-}
-
-function initializeDatabase(db: Database.Database) {
-  db.exec(`
+  await sql`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      price REAL NOT NULL,
+      price DOUBLE PRECISION NOT NULL,
       description TEXT NOT NULL,
       images TEXT DEFAULT '[]',
       image_url TEXT DEFAULT '',
       stock INTEGER DEFAULT 100,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`
     CREATE TABLE IF NOT EXISTS orders (
       id TEXT PRIMARY KEY,
       order_number TEXT UNIQUE NOT NULL,
@@ -44,35 +28,31 @@ function initializeDatabase(db: Database.Database) {
       customer_phone TEXT NOT NULL,
       customer_address TEXT NOT NULL,
       items TEXT NOT NULL,
-      total_amount REAL NOT NULL,
+      total_amount DOUBLE PRECISION NOT NULL,
       status TEXT DEFAULT 'pending',
       status_message TEXT DEFAULT '',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
-
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       order_id TEXT NOT NULL,
       customer_phone TEXT NOT NULL,
       message TEXT NOT NULL,
       is_read INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (order_id) REFERENCES orders(id)
-    );
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_phone ON notifications(customer_phone)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_notifications_order ON notifications(order_id)`;
 
-    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-    CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
-    CREATE INDEX IF NOT EXISTS idx_notifications_phone ON notifications(customer_phone);
-    CREATE INDEX IF NOT EXISTS idx_notifications_order ON notifications(order_id);
-  `);
-
-  // Seed demo products if table is empty
-  const count = db.prepare('SELECT COUNT(*) as count FROM products').get() as { count: number };
-  if (count.count === 0) {
-    const insert = db.prepare(
-      'INSERT INTO products (id, name, price, description, images, image_url, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    );
+  // Seed demo products if empty
+  const countResult = await sql`SELECT COUNT(*) as count FROM products`;
+  if (Number(countResult[0].count) === 0) {
     const demoProducts = [
       { id: '1', name: 'Fresh Organic Milk', price: 65, description: 'Farm-fresh organic whole milk, 1 liter. Rich in calcium and protein.', images: ['https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400'], stock: 50 },
       { id: '2', name: 'Whole Wheat Bread', price: 45, description: 'Freshly baked whole wheat bread, perfect for breakfast and sandwiches.', images: ['https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400'], stock: 100 },
@@ -81,28 +61,26 @@ function initializeDatabase(db: Database.Database) {
       { id: '5', name: 'Fresh Tomatoes (1kg)', price: 30, description: 'Locally sourced ripe tomatoes, perfect for cooking and salads.', images: ['https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400'], stock: 200 },
       { id: '6', name: 'Cooking Oil (1L)', price: 180, description: 'Pure refined soybean cooking oil for everyday use.', images: ['https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400'], stock: 60 },
     ];
-
-    const insertMany = db.transaction((products: typeof demoProducts) => {
-      for (const p of products) {
-        insert.run(p.id, p.name, p.price, p.description, JSON.stringify(p.images), p.images[0], p.stock, new Date().toISOString());
-      }
-    });
-    insertMany(demoProducts);
+    for (const p of demoProducts) {
+      await sql`INSERT INTO products (id, name, price, description, images, image_url, stock, created_at)
+        VALUES (${p.id}, ${p.name}, ${p.price}, ${p.description}, ${JSON.stringify(p.images)}, ${p.images[0]}, ${p.stock}, NOW())`;
+    }
   }
+  _initialized = true;
 }
 
 // --- Product operations ---
 
 export async function getProducts() {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM products WHERE stock > 0 ORDER BY created_at DESC').all() as any[];
+  await ensureTables();
+  const rows = await sql`SELECT * FROM products WHERE stock > 0 ORDER BY created_at DESC`;
   return rows.map(parseProduct);
 }
 
 export async function getProductById(id: string) {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
-  return row ? parseProduct(row) : null;
+  await ensureTables();
+  const rows = await sql`SELECT * FROM products WHERE id::text = ${id}`;
+  return rows[0] ? parseProduct(rows[0]) : null;
 }
 
 export async function createProduct(
@@ -112,14 +90,13 @@ export async function createProduct(
   images: string[],
   stock: number
 ) {
-  const db = getDb();
+  await ensureTables();
   const id = String(Date.now());
   const imageList = images || [];
-  db.prepare(
-    'INSERT INTO products (id, name, price, description, images, image_url, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, name, price, description, JSON.stringify(imageList), imageList[0] || '', stock, new Date().toISOString());
-
-  return { id, name, price, description, images: imageList, image_url: imageList[0] || '', stock, created_at: new Date().toISOString() };
+  const now = new Date().toISOString();
+  await sql`INSERT INTO products (id, name, price, description, images, image_url, stock, created_at)
+    VALUES (${id}, ${name}, ${price}, ${description}, ${JSON.stringify(imageList)}, ${imageList[0] || ''}, ${stock}, ${now})`;
+  return { id, name, price, description, images: imageList, image_url: imageList[0] || '', stock, created_at: now };
 }
 
 export async function updateProduct(
@@ -130,26 +107,25 @@ export async function updateProduct(
   images: string[],
   stock: number
 ) {
-  const db = getDb();
-  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
-  if (!existing) return null;
+  await ensureTables();
+  const existing = await sql`SELECT * FROM products WHERE id::text = ${id}`;
+  if (!existing[0]) return null;
 
-  const existingImages = safeJsonParse(existing.images, existing.image_url ? [existing.image_url] : []);
+  const existingImages = safeJsonParse(existing[0].images as string, existing[0].image_url ? [existing[0].image_url as string] : []);
   const newImages = images && images.length > 0 ? images : existingImages;
 
-  db.prepare(
-    'UPDATE products SET name = ?, price = ?, description = ?, images = ?, image_url = ?, stock = ? WHERE id = ?'
-  ).run(name, price, description, JSON.stringify(newImages), newImages[0] || '', stock, id);
+  await sql`UPDATE products SET name = ${name}, price = ${price}, description = ${description},
+    images = ${JSON.stringify(newImages)}, image_url = ${newImages[0] || ''}, stock = ${stock} WHERE id::text = ${id}`;
 
-  return { id, name, price, description, images: newImages, image_url: newImages[0] || '', stock, created_at: existing.created_at };
+  return { id, name, price, description, images: newImages, image_url: newImages[0] || '', stock, created_at: existing[0].created_at };
 }
 
 export async function deleteProduct(id: string) {
-  const db = getDb();
-  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
-  if (!existing) return null;
-  db.prepare('DELETE FROM products WHERE id = ?').run(id);
-  return parseProduct(existing);
+  await ensureTables();
+  const existing = await sql`SELECT * FROM products WHERE id::text = ${id}`;
+  if (!existing[0]) return null;
+  await sql`DELETE FROM products WHERE id::text = ${id}`;
+  return parseProduct(existing[0]);
 }
 
 // --- Order operations ---
@@ -162,43 +138,43 @@ export async function createOrder(
   totalAmount: number,
   status: string = 'pending'
 ) {
-  const db = getDb();
+  await ensureTables();
   const id = String(Date.now());
   const orderNumber = `ORD-${Date.now()}`;
+  const now = new Date().toISOString();
 
-  db.prepare(
-    'INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_address, items, total_amount, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, orderNumber, customerName, customerPhone, customerAddress, JSON.stringify(items), totalAmount, status, new Date().toISOString(), new Date().toISOString());
+  await sql`INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_address, items, total_amount, status, created_at, updated_at)
+    VALUES (${id}, ${orderNumber}, ${customerName}, ${customerPhone}, ${customerAddress}, ${JSON.stringify(items)}, ${totalAmount}, ${status}, ${now}, ${now})`;
 
   return {
     id, order_number: orderNumber, customer_name: customerName, customer_phone: customerPhone,
     customer_address: customerAddress, items, total_amount: totalAmount, status, status_message: '',
-    created_at: new Date().toISOString(),
+    created_at: now,
   };
 }
 
 export async function getOrderById(id: string) {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
-  return row ? parseOrder(row) : null;
+  await ensureTables();
+  const rows = await sql`SELECT * FROM orders WHERE id::text = ${id}`;
+  return rows[0] ? parseOrder(rows[0]) : null;
 }
 
 export async function getOrders(limit: number = 100) {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
+  await ensureTables();
+  const rows = await sql`SELECT * FROM orders ORDER BY created_at DESC LIMIT ${limit}`;
   return rows.map(parseOrder);
 }
 
 export async function getOrdersByPhone(phone: string) {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM orders WHERE customer_phone = ? ORDER BY created_at DESC').all(phone) as any[];
+  await ensureTables();
+  const rows = await sql`SELECT * FROM orders WHERE customer_phone = ${phone} ORDER BY created_at DESC`;
   return rows.map(parseOrder);
 }
 
 export async function updateOrderStatus(id: string, status: string) {
-  const db = getDb();
-  const existing = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
-  if (!existing) return null;
+  await ensureTables();
+  const existing = await sql`SELECT * FROM orders WHERE id::text = ${id}`;
+  if (!existing[0]) return null;
 
   const statusMessages: Record<string, string> = {
     confirmed: '✅ Your order has been approved and confirmed! It will be processed soon.',
@@ -208,42 +184,36 @@ export async function updateOrderStatus(id: string, status: string) {
   };
 
   const message = statusMessages[status] || `Order status updated to: ${status}`;
+  const now = new Date().toISOString();
 
-  db.prepare(
-    'UPDATE orders SET status = ?, status_message = ?, updated_at = ? WHERE id = ?'
-  ).run(status, message, new Date().toISOString(), id);
+  await sql`UPDATE orders SET status = ${status}, status_message = ${message}, updated_at = ${now} WHERE id::text = ${id}`;
 
   // Create notification for the customer
   const notifId = `notif-${Date.now()}`;
-  db.prepare(
-    'INSERT INTO notifications (id, order_id, customer_phone, message, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(notifId, id, existing.customer_phone, message, new Date().toISOString());
+  await sql`INSERT INTO notifications (id, order_id, customer_phone, message, created_at)
+    VALUES (${notifId}, ${id}, ${existing[0].customer_phone}, ${message}, ${now})`;
 
-  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
-  return parseOrder(updated);
+  const updated = await sql`SELECT * FROM orders WHERE id::text = ${id}`;
+  return parseOrder(updated[0]);
 }
 
 // --- Notification operations ---
 
 export async function getNotificationsByPhone(phone: string) {
-  const db = getDb();
-  const rows = db.prepare(
-    'SELECT n.*, o.order_number FROM notifications n JOIN orders o ON n.order_id = o.id WHERE n.customer_phone = ? ORDER BY n.created_at DESC'
-  ).all(phone) as any[];
+  await ensureTables();
+  const rows = await sql`SELECT n.*, o.order_number FROM notifications n JOIN orders o ON n.order_id = o.id WHERE n.customer_phone = ${phone} ORDER BY n.created_at DESC`;
   return rows;
 }
 
 export async function getNotificationsByOrderId(orderId: string) {
-  const db = getDb();
-  const rows = db.prepare(
-    'SELECT * FROM notifications WHERE order_id = ? ORDER BY created_at DESC'
-  ).all(orderId) as any[];
+  await ensureTables();
+  const rows = await sql`SELECT * FROM notifications WHERE order_id = ${orderId} ORDER BY created_at DESC`;
   return rows;
 }
 
 export async function markNotificationsRead(phone: string) {
-  const db = getDb();
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE customer_phone = ?').run(phone);
+  await ensureTables();
+  await sql`UPDATE notifications SET is_read = 1 WHERE customer_phone = ${phone}`;
 }
 
 export async function verifyAdminPassword(password: string): Promise<boolean> {
@@ -252,20 +222,25 @@ export async function verifyAdminPassword(password: string): Promise<boolean> {
 
 // --- Helpers ---
 
-function safeJsonParse(str: string, fallback: any[] = []): any[] {
+function safeJsonParse(str: any, fallback: any[] = []): any[] {
+  if (Array.isArray(str)) return str;
   try { return JSON.parse(str); } catch { return fallback; }
 }
 
 function parseProduct(row: any) {
+  const images = safeJsonParse(row.images, row.image_url ? [row.image_url] : []);
   return {
     ...row,
-    images: safeJsonParse(row.images, row.image_url ? [row.image_url] : []),
+    id: String(row.id),
+    images,
+    image_url: row.image_url || images[0] || '',
   };
 }
 
 function parseOrder(row: any) {
   return {
     ...row,
+    id: String(row.id),
     items: safeJsonParse(row.items, []),
     total_amount: row.total_amount,
   };
