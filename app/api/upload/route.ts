@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import { existsSync } from 'fs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,10 +59,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    await mkdir(uploadsDir, { recursive: true });
 
     const urls: string[] = [];
 
@@ -71,14 +69,17 @@ export async function POST(request: NextRequest) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
-      // Sanitize filename: only allow alphanumeric, dash, underscore
-      const extMatch = file.name.match(/\.(jpe?g|png|webp|gif)$/i);
-      const ext = extMatch ? extMatch[0].toLowerCase() : '.jpg';
-      const safeName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`;
-      const filepath = path.join(uploadDir, safeName);
+      // Generate unique filename
+      const ext = file.name.split('.').pop() || 'jpg';
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filename = `${Date.now()}-${sanitizedName}`;
 
-      await writeFile(filepath, buffer);
-      urls.push(`/uploads/${safeName}`);
+      // Save file to public/uploads/
+      const filePath = path.join(uploadsDir, filename);
+      await writeFile(filePath, buffer);
+
+      // Return URL path (not base64)
+      urls.push(`/uploads/${filename}`);
     }
 
     return NextResponse.json({ success: true, urls });

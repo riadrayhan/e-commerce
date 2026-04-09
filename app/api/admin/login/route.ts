@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
+import { SignJWT } from 'jose';
 
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'admin').trim();
-const JWT_SECRET = (process.env.JWT_SECRET || 'your-secret-key').trim();
+const JWT_SECRET = new TextEncoder().encode(
+  (process.env.JWT_SECRET || 'your-secret-key').trim()
+);
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,11 +17,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = jwt.sign({ role: 'admin', iat: Date.now() }, JWT_SECRET, {
-      expiresIn: '7d',
-    });
+    const token = await new SignJWT({ role: 'admin' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('7d')
+      .sign(JWT_SECRET);
 
-    const response = NextResponse.json({ success: true, token }, { status: 200 });
+    const response = NextResponse.json({ success: true }, { status: 200 });
     response.cookies.set('adminToken', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

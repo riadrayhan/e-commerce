@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
+import { jwtVerify } from 'jose';
 
 export const dynamic = 'force-dynamic';
 
-const JWT_SECRET = (process.env.JWT_SECRET || 'your-secret-key').trim();
+const JWT_SECRET = new TextEncoder().encode(
+  (process.env.JWT_SECRET || 'your-secret-key').trim()
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      jwt.verify(token, JWT_SECRET);
+      await jwtVerify(token, JWT_SECRET);
       return NextResponse.json({ authenticated: true }, { status: 200 });
     } catch (verifyError) {
       const response = NextResponse.json(

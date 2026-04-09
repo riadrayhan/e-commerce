@@ -25,9 +25,6 @@ export default function AdminLoginPage() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        // Also store token in cookie via JS as backup
-        document.cookie = `adminToken=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
         toast.success('Login successful!');
         router.push('/admin/dashboard');
       } else {

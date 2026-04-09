@@ -6,7 +6,9 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const orders = await getOrders(100);
-    return NextResponse.json({ success: true, data: orders });
+    return NextResponse.json({ success: true, data: orders }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+    });
   } catch (error) {
     console.error('[API Error]', error);
     return NextResponse.json(

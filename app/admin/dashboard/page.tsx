@@ -59,13 +59,18 @@ function AdminDashboardContent() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/products');
+      const response = await fetch('/api/products', { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) {
+        console.error('API returned error:', result.error);
+        toast.error(result.error || 'Failed to load products');
+        return;
+      }
       const products = Array.isArray(result.data) ? result.data : Array.isArray(result) ? result : [];
       setProducts(products);
     } catch (error) {
       console.error('Error fetching products:', error);
-      toast.error('Failed to load products');
+      toast.error('Failed to load products - check DB connection');
     } finally {
       setLoading(false);
     }
@@ -73,8 +78,12 @@ function AdminDashboardContent() {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch('/api/orders');
+      const response = await fetch('/api/orders', { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) {
+        console.error('API returned error:', result.error);
+        return;
+      }
       const orders = Array.isArray(result.data) ? result.data : Array.isArray(result) ? result : [];
       setOrders(orders);
     } catch (error) {

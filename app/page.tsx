@@ -79,8 +79,8 @@ const DEMO_PRODUCTS: Product[] = [
 ];
 
 export default function Home() {
-  const [products, setProducts] = useState<Product[]>(DEMO_PRODUCTS);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>(DEMO_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [cartCount, setCartCount] = useState(0);
@@ -107,23 +107,32 @@ export default function Home() {
     setFilteredProducts(filtered);
   }, [searchQuery, products]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (attempt = 1) => {
     try {
-      const response = await fetch('/api/products');
+      const response = await fetch('/api/products', { cache: 'no-store' });
       if (response.ok) {
         const result = await response.json();
         const productsData = result.data || result || [];
         if (Array.isArray(productsData) && productsData.length > 0) {
           setProducts(productsData);
           setFilteredProducts(productsData);
+          setLoading(false);
+          return;
         }
+      }
+      // Retry up to 3 times (handles Neon DB cold start)
+      if (attempt < 3) {
+        setTimeout(() => fetchProducts(attempt + 1), 2000);
+        return;
       }
     } catch (error) {
       console.error('[v0] Error fetching products:', error);
-      // Keep demo products as fallback
-    } finally {
-      setLoading(false);
+      if (attempt < 3) {
+        setTimeout(() => fetchProducts(attempt + 1), 2000);
+        return;
+      }
     }
+    setLoading(false);
   };
 
   const addToCart = (product: Product) => {
@@ -372,7 +381,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-border/30 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; 2024 DailyMart. All rights reserved.</p>
+            <p>&copy; 2025 DailyMart. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -18,7 +18,9 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: product });
+    return NextResponse.json({ success: true, data: product }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+    });
   } catch (error) {
     console.error('[API Error]', error);
     return NextResponse.json(
