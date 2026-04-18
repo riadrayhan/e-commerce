@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB per file
+const MAX_SIZE = 2 * 1024 * 1024; // 2MB per file (base64 inflates ~33%)
+const MAX_FILES = 4;
 
+// Images are returned as base64 data URLs and stored directly in Postgres
+// alongside the product row. This survives serverless cold starts AND
+// Vercel deployments (the public/uploads dir is read-only on Vercel).
 export async function POST(request: NextRequest) {
   try {
     let formData: FormData;
@@ -24,26 +27,21 @@ export async function POST(request: NextRequest) {
     const files = formData.getAll('files') as File[];
 
     if (!files || files.length === 0) {
+      return NextResponse.json({ success: false, error: 'No files uploaded' }, { status: 400 });
+    }
+
+    if (files.length > MAX_FILES) {
       return NextResponse.json(
-        { success: false, error: 'No files uploaded' },
+        { success: false, error: `Maximum ${MAX_FILES} images allowed` },
         { status: 400 }
       );
     }
 
-    if (files.length > 4) {
-      return NextResponse.json(
-        { success: false, error: 'Maximum 4 images allowed' },
-        { status: 400 }
-      );
-    }
+    const urls: string[] = [];
 
-    // Validate files
     for (const file of files) {
       if (!file || typeof file.arrayBuffer !== 'function') {
-        return NextResponse.json(
-          { success: false, error: 'Invalid file data' },
-          { status: 400 }
-        );
+        return NextResponse.json({ success: false, error: 'Invalid file data' }, { status: 400 });
       }
       if (!ALLOWED_TYPES.includes(file.type)) {
         return NextResponse.json(
@@ -53,33 +51,14 @@ export async function POST(request: NextRequest) {
       }
       if (file.size > MAX_SIZE) {
         return NextResponse.json(
-          { success: false, error: `File too large: ${file.name}. Maximum 5MB per file` },
+          { success: false, error: `File too large: ${file.name}. Maximum 2MB per file` },
           { status: 400 }
         );
       }
-    }
 
-    // Ensure uploads directory exists
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    await mkdir(uploadsDir, { recursive: true });
-
-    const urls: string[] = [];
-
-    for (const file of files) {
       const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
-      // Generate unique filename
-      const ext = file.name.split('.').pop() || 'jpg';
-      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filename = `${Date.now()}-${sanitizedName}`;
-
-      // Save file to public/uploads/
-      const filePath = path.join(uploadsDir, filename);
-      await writeFile(filePath, buffer);
-
-      // Return URL path (not base64)
-      urls.push(`/uploads/${filename}`);
+      const base64 = Buffer.from(bytes).toString('base64');
+      urls.push(`data:${file.type};base64,${base64}`);
     }
 
     return NextResponse.json({ success: true, urls });

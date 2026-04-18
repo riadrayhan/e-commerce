@@ -37,7 +37,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, price, description, images, imageUrl, stock } = body;
+    const { name, price, description, images, imageUrl, stock, category } = body;
 
     if (!name || !price || !description) {
       return NextResponse.json(
@@ -49,7 +49,7 @@ export async function PUT(
     // Support both new (images array) and old (imageUrl) formats
     const imageList = Array.isArray(images) ? images : (imageUrl ? [imageUrl] : []);
 
-    const product = await updateProduct(id, name, price, description, imageList, stock || 100);
+    const product = await updateProduct(id, name, price, description, imageList, stock || 100, category ? String(category).toLowerCase() : undefined);
 
     if (!product) {
       return NextResponse.json(

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, price, description, images, imageUrl, imageData, stock } = body;
+    const { name, price, description, images, imageUrl, imageData, stock, category } = body;
 
     if (!name || price === undefined || !description) {
       return NextResponse.json(
@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
       parseFloat(price),
       description,
       imageList,
-      parseInt(stock) || 100
+      parseInt(stock) || 100,
+      (category || 'food').toLowerCase()
     );
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });

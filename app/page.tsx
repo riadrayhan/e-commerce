@@ -1,11 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { ShoppingCart, Search, Truck, Shield, Clock, Leaf, Star, ArrowRight, Menu, X } from 'lucide-react';
+import {
+  ShoppingCart,
+  Search,
+  Leaf,
+  UtensilsCrossed,
+  Watch,
+  Shirt,
+  Sparkles,
+  LayoutGrid,
+  Package,
+} from 'lucide-react';
 
 interface Product {
   id: string;
@@ -15,76 +25,27 @@ interface Product {
   image_url?: string;
   images?: string[];
   stock: number;
+  category?: string;
   created_at?: string;
 }
 
-// Demo products for initial load
-const DEMO_PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Fresh Vegetables Bundle',
-    price: 299,
-    description: 'Assorted fresh vegetables - tomato, onion, carrot, potato',
-    stock: 50,
-  },
-  {
-    id: '2',
-    name: 'Whole Wheat Flour',
-    price: 149,
-    description: '5kg premium whole wheat flour for daily use',
-    stock: 100,
-  },
-  {
-    id: '3',
-    name: 'Cooking Oil Combo',
-    price: 499,
-    description: 'Mixed cooking oil - sunflower and mustard oil',
-    stock: 30,
-  },
-  {
-    id: '4',
-    name: 'Milk & Dairy Pack',
-    price: 199,
-    description: 'Fresh milk and yogurt combo pack',
-    stock: 75,
-  },
-  {
-    id: '5',
-    name: 'Rice - Basmati',
-    price: 399,
-    description: '2kg premium basmati rice',
-    stock: 60,
-  },
-  {
-    id: '6',
-    name: 'Spice Blend',
-    price: 89,
-    description: 'Multi-purpose spice blend for cooking',
-    stock: 120,
-  },
-  {
-    id: '7',
-    name: 'Household Essentials',
-    price: 349,
-    description: 'Soap, shampoo, and detergent combo',
-    stock: 45,
-  },
-  {
-    id: '8',
-    name: 'Fresh Eggs Dozen',
-    price: 99,
-    description: '12 pieces of fresh farm eggs',
-    stock: 40,
-  },
-];
+const CATEGORIES = [
+  { key: 'all', label: 'All', icon: LayoutGrid },
+  { key: 'food', label: 'Food', icon: UtensilsCrossed },
+  { key: 'accessories', label: 'Accessories', icon: Watch },
+  { key: 'dress', label: 'Dress', icon: Shirt },
+  { key: 'cosmetics', label: 'Cosmetics', icon: Sparkles },
+  { key: 'other', label: 'Other', icon: Package },
+] as const;
+
+type CategoryKey = (typeof CATEGORIES)[number]['key'];
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
   const [cartCount, setCartCount] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -92,20 +53,9 @@ export default function Home() {
     if (savedCart) {
       try {
         setCartCount(JSON.parse(savedCart).length);
-      } catch (e) {
-        console.error('[v0] Error parsing cart:', e);
-      }
+      } catch {}
     }
   }, []);
-
-  useEffect(() => {
-    const filtered = products.filter(
-      (product) =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredProducts(filtered);
-  }, [searchQuery, products]);
 
   const fetchProducts = async (attempt = 1) => {
     try {
@@ -115,12 +65,10 @@ export default function Home() {
         const productsData = result.data || result || [];
         if (Array.isArray(productsData) && productsData.length > 0) {
           setProducts(productsData);
-          setFilteredProducts(productsData);
           setLoading(false);
           return;
         }
       }
-      // Retry up to 3 times (handles Neon DB cold start)
       if (attempt < 3) {
         setTimeout(() => fetchProducts(attempt + 1), 2000);
         return;
@@ -135,15 +83,48 @@ export default function Home() {
     setLoading(false);
   };
 
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    let list = products.filter((p) => {
+      const matchesSearch =
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q);
+      const matchesCategory =
+        activeCategory === 'all' ||
+        (p.category || 'food').toLowerCase() === activeCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    // Food first when on "All"
+    if (activeCategory === 'all') {
+      list = [...list].sort((a, b) => {
+        const af = (a.category || 'food').toLowerCase() === 'food' ? 0 : 1;
+        const bf = (b.category || 'food').toLowerCase() === 'food' ? 0 : 1;
+        return af - bf;
+      });
+    }
+    return list;
+  }, [products, searchQuery, activeCategory]);
+
   const addToCart = (product: Product) => {
     try {
       const cart = JSON.parse(localStorage.getItem('cart') || '[]');
       const productId = (product as any)._id || product.id;
-      const existingItem = cart.find((item: any) => item._id === productId);
-      if (existingItem) {
-        existingItem.quantity += 1;
+      const existing = cart.find((item: any) => item._id === productId);
+      if (existing) {
+        existing.quantity += 1;
       } else {
-        cart.push({ _id: productId, name: product.name, price: product.price, imageUrl: product.images?.[0] || (product as any).image_url || (product as any).imageUrl, quantity: 1 });
+        cart.push({
+          _id: productId,
+          name: product.name,
+          price: product.price,
+          imageUrl:
+            product.images?.[0] ||
+            (product as any).image_url ||
+            (product as any).imageUrl,
+          quantity: 1,
+        });
       }
       localStorage.setItem('cart', JSON.stringify(cart));
       setCartCount(cart.length);
@@ -153,24 +134,21 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border/30 backdrop-blur-sm">
+    <main className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-white border-b border-orange-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4 gap-4">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-3 flex-shrink-0">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-lg">
-                <Leaf className="w-6 h-6 text-primary-foreground" />
+          <div className="flex items-center justify-between py-3 gap-4">
+            <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-md">
+                <Leaf className="w-5 h-5 text-white" />
               </div>
-              <div className="hidden sm:block">
-                <div className="font-bold text-lg text-foreground">DailyMart</div>
-                <div className="text-xs text-muted-foreground">Fresh & Fast</div>
-              </div>
+              <span className="font-bold text-xl text-foreground">
+                Daily<span className="text-primary">Mart</span>
+              </span>
             </Link>
 
-            {/* Search Bar */}
-            <div className="flex-1 max-w-md hidden sm:block">
+            <div className="flex-1 max-w-xl hidden sm:block">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -178,50 +156,33 @@ export default function Home() {
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 rounded-lg"
+                  className="w-full pl-10 pr-4 rounded-full border-orange-200 focus-visible:ring-primary"
                 />
               </div>
             </div>
 
-            {/* Admin & Cart Links */}
-            <div className="flex items-center gap-3">
-              <Link href="/track-order">
-                <Button variant="outline" size="sm">
-                  Track Order
-                </Button>
+            <div className="flex items-center gap-2">
+              <Link href="/track-order" className="hidden md:block">
+                <Button variant="ghost" size="sm">Track</Button>
               </Link>
-              <Link href="/admin/login">
-                <Button variant="outline" size="sm">
-                  Admin
-                </Button>
+              <Link href="/admin/login" className="hidden md:block">
+                <Button variant="ghost" size="sm">Admin</Button>
               </Link>
               <Link href="/cart" className="relative">
-                <Button variant="outline" size="sm">
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-full">
                   <ShoppingCart className="w-4 h-4" />
                   {cartCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-accent text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    <span className="absolute -top-1 -right-1 bg-foreground text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">
                       {cartCount}
                     </span>
                   )}
                 </Button>
               </Link>
-              
-              {/* Mobile Menu Toggle */}
-              <button
-                className="sm:hidden"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                {mobileMenuOpen ? (
-                  <X className="w-6 h-6" />
-                ) : (
-                  <Menu className="w-6 h-6" />
-                )}
-              </button>
             </div>
           </div>
 
-          {/* Mobile Search */}
-          <div className="sm:hidden pb-4">
+          {/* Mobile search */}
+          <div className="sm:hidden pb-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -229,162 +190,133 @@ export default function Home() {
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 rounded-lg"
+                className="w-full pl-10 pr-4 rounded-full border-orange-200"
               />
             </div>
           </div>
+
+          {/* Category Tab Bar */}
+          <nav className="flex gap-1 sm:gap-2 overflow-x-auto pb-3 -mx-1 px-1">
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const active = activeCategory === cat.key;
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => setActiveCategory(cat.key)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${
+                    active
+                      ? 'bg-primary text-white border-primary shadow-md'
+                      : 'bg-white text-foreground border-orange-100 hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {cat.label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-primary/10 to-accent/10 border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
-          <div className="grid md:grid-cols-2 gap-8 items-center">
-            <div>
-              <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 text-balance">
-                Fresh Essentials, Right to Your Door
-              </h1>
-              <p className="text-lg text-muted-foreground mb-8">
-                Shop daily necessities with the best prices. Fast delivery, guaranteed quality, and 24/7 customer support.
-              </p>
-
-              <div className="mt-8 grid grid-cols-3 gap-4 sm:gap-6">
-                <div>
-                  <div className="text-2xl font-bold text-primary">50K+</div>
-                  <div className="text-sm text-muted-foreground">Happy Customers</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary">24/7</div>
-                  <div className="text-sm text-muted-foreground">Delivery Support</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary">100%</div>
-                  <div className="text-sm text-muted-foreground">Quality Guarantee</div>
-                </div>
-              </div>
-            </div>
-
+      {/* Hero */}
+      <section className="bg-gradient-to-br from-orange-50 via-white to-orange-50 border-b border-orange-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+          <div className="text-center max-w-2xl mx-auto">
+            <h1 className="text-3xl sm:text-5xl font-bold text-foreground mb-3">
+              Fresh Picks, <span className="text-primary">Delivered Daily</span>
+            </h1>
+            <p className="text-muted-foreground text-base sm:text-lg">
+              Food, fashion & essentials at your fingertips.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* Products Section */}
-      <section className="bg-background py-12 sm:py-20">
+      {/* Products */}
+      <section className="bg-white py-10 sm:py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-12">
-            <h2 className="text-3xl font-bold mb-2">
-              {searchQuery ? 'Search Results' : 'Featured Products'}
+          <div className="flex items-end justify-between mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold">
+              {activeCategory === 'all'
+                ? 'All Products'
+                : CATEGORIES.find((c) => c.key === activeCategory)?.label}
             </h2>
-            <p className="text-muted-foreground">
-              {filteredProducts.length} products available
-            </p>
+            <span className="text-sm text-muted-foreground">
+              {filteredProducts.length} items
+            </span>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                <p className="mt-4 text-muted-foreground">Loading products...</p>
-              </div>
+            <div className="flex items-center justify-center py-20">
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className="text-center py-12">
-              <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <h3 className="text-xl font-bold mb-2">No products found</h3>
-              <p className="text-muted-foreground">Try searching for something else</p>
+            <div className="text-center py-20">
+              <Package className="w-12 h-12 text-orange-300 mx-auto mb-3" />
+              <p className="text-muted-foreground">No products found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {filteredProducts.map((product) => (
-                <Link key={product.id} href={`/product/${product.id}`}>
-                  <Card className="hover:shadow-lg hover:border-primary transition-all h-full flex flex-col cursor-pointer">
-                    {(product.images?.[0] || product.image_url) ? (
-                      <div className="h-40 rounded-t-lg overflow-hidden">
-                        <img src={product.images?.[0] || product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                    <div className="bg-gradient-to-br from-primary/5 to-accent/5 h-40 flex items-center justify-center rounded-t-lg">
-                      <div className="text-center">
-                        <Leaf className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
-                        <p className="text-xs text-muted-foreground">Product Image</p>
-                      </div>
-                    </div>
-                    )}
-                    <CardContent className="flex-1 pt-4 flex flex-col">
-                      <h3 className="font-bold text-lg mb-2 line-clamp-2">
-                        {product.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2 flex-1">
-                        {product.description}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-2xl font-bold text-primary">
-                            TK {product.price}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {filteredProducts.map((product) => {
+                const img = product.images?.[0] || product.image_url || '';
+                return (
+                  <Link key={product.id} href={`/product/${product.id}`}>
+                    <Card className="group overflow-hidden border-orange-100 hover:border-primary hover:shadow-xl transition-all h-full flex flex-col cursor-pointer rounded-2xl py-0">
+                      <div className="relative aspect-square bg-orange-50 overflow-hidden">
+                        {img ? (
+                          <img
+                            src={img}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Leaf className="w-10 h-10 text-orange-200" />
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            Stock: {product.stock}
+                        )}
+                        {product.category && (
+                          <span className="absolute top-2 left-2 bg-white/90 backdrop-blur text-primary text-[10px] uppercase tracking-wide font-semibold px-2 py-1 rounded-full">
+                            {product.category}
+                          </span>
+                        )}
+                      </div>
+                      <CardContent className="flex-1 p-3 sm:p-4 flex flex-col">
+                        <h3 className="font-semibold text-sm sm:text-base line-clamp-2 mb-2 min-h-[2.5rem]">
+                          {product.name}
+                        </h3>
+                        <div className="mt-auto flex items-center justify-between gap-2">
+                          <div className="font-bold text-primary text-lg">
+                            ৳{product.price}
                           </div>
+                          <Button
+                            size="sm"
+                            className="bg-primary hover:bg-primary/90 text-white rounded-full h-8 w-8 p-0"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              addToCart(product);
+                            }}
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            addToCart(product);
-                          }}
-                        >
-                          <ShoppingCart className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-card border-t border-border/30 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <div className="font-bold text-lg mb-4">DailyMart</div>
-              <p className="text-sm text-muted-foreground">
-                Your trusted daily essentials store
-              </p>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4">Shop</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/" className="hover:text-foreground">Products</Link></li>
-                <li><Link href="/cart" className="hover:text-foreground">Cart</Link></li>
-                <li><Link href="/" className="hover:text-foreground">New Arrivals</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4">Support</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/" className="hover:text-foreground">Contact Us</Link></li>
-                <li><Link href="/" className="hover:text-foreground">FAQ</Link></li>
-                <li><Link href="/track-order" className="hover:text-foreground">Track Order</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/" className="hover:text-foreground">Privacy</Link></li>
-                <li><Link href="/" className="hover:text-foreground">Terms</Link></li>
-                <li><Link href="/" className="hover:text-foreground">Returns</Link></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-border/30 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; 2025 DailyMart. All rights reserved.</p>
-          </div>
+      <footer className="bg-orange-50 border-t border-orange-100 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
+          <p>&copy; 2026 DailyMart — Fresh & Fast Delivery</p>
         </div>
       </footer>
     </main>
   );
 }
+'u

@@ -40,9 +40,13 @@ async function ensureSchema() {
       images TEXT DEFAULT '[]',
       image_url TEXT DEFAULT '',
       stock INTEGER DEFAULT 100,
+      category TEXT DEFAULT 'food',
       created_at TEXT NOT NULL
     )
   `;
+
+  // Migration: add category column to existing tables
+  await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'food'`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS orders (
@@ -81,15 +85,18 @@ async function ensureSchema() {
   if (parseInt(countResult[0].cnt) === 0) {
     const now = new Date().toISOString();
     const demos = [
-      { id: '1', name: 'Fresh Organic Milk', price: 65, desc: 'Farm-fresh organic whole milk, 1 liter. Rich in calcium and protein.', img: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400', stock: 50 },
-      { id: '2', name: 'Whole Wheat Bread', price: 45, desc: 'Freshly baked whole wheat bread, perfect for breakfast and sandwiches.', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400', stock: 100 },
-      { id: '3', name: 'Free Range Eggs (12 pcs)', price: 120, desc: 'Premium free-range eggs from local farms. Pack of 12.', img: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400', stock: 75 },
-      { id: '4', name: 'Basmati Rice (5kg)', price: 350, desc: 'Premium aged basmati rice, long grain. Perfect for biryani and pulao.', img: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400', stock: 40 },
-      { id: '5', name: 'Fresh Tomatoes (1kg)', price: 30, desc: 'Locally sourced ripe tomatoes, perfect for cooking and salads.', img: 'https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400', stock: 200 },
-      { id: '6', name: 'Cooking Oil (1L)', price: 180, desc: 'Pure refined soybean cooking oil for everyday use.', img: 'https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400', stock: 60 },
+      { id: '1', name: 'Fresh Organic Milk', price: 65, desc: 'Farm-fresh organic whole milk, 1 liter.', img: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400', stock: 50, category: 'food' },
+      { id: '2', name: 'Whole Wheat Bread', price: 45, desc: 'Freshly baked whole wheat bread.', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400', stock: 100, category: 'food' },
+      { id: '3', name: 'Free Range Eggs (12 pcs)', price: 120, desc: 'Premium free-range eggs. Pack of 12.', img: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400', stock: 75, category: 'food' },
+      { id: '4', name: 'Basmati Rice (5kg)', price: 350, desc: 'Premium aged basmati rice, long grain.', img: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400', stock: 40, category: 'food' },
+      { id: '5', name: 'Fresh Tomatoes (1kg)', price: 30, desc: 'Locally sourced ripe tomatoes.', img: 'https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=400', stock: 200, category: 'food' },
+      { id: '6', name: 'Cooking Oil (1L)', price: 180, desc: 'Pure refined soybean cooking oil.', img: 'https://images.unsplash.com/photo-1474979266404-7eaabdf50494?w=400', stock: 60, category: 'food' },
+      { id: '7', name: 'Leather Wallet', price: 750, desc: 'Genuine leather wallet, multiple card slots.', img: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=400', stock: 25, category: 'accessories' },
+      { id: '8', name: 'Cotton T-Shirt', price: 499, desc: 'Premium cotton round-neck t-shirt.', img: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400', stock: 80, category: 'dress' },
+      { id: '9', name: 'Face Moisturizer', price: 350, desc: 'Hydrating face moisturizer for all skin types.', img: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400', stock: 60, category: 'cosmetics' },
     ];
     for (const p of demos) {
-      await sql`INSERT INTO products (id, name, price, description, images, image_url, stock, created_at) VALUES (${p.id}, ${p.name}, ${p.price}, ${p.desc}, ${JSON.stringify([p.img])}, ${p.img}, ${p.stock}, ${now}) ON CONFLICT (id) DO NOTHING`;
+      await sql`INSERT INTO products (id, name, price, description, images, image_url, stock, category, created_at) VALUES (${p.id}, ${p.name}, ${p.price}, ${p.desc}, ${JSON.stringify([p.img])}, ${p.img}, ${p.stock}, ${p.category}, ${now}) ON CONFLICT (id) DO NOTHING`;
     }
     console.log('[DB] Seeded demo products');
   }
@@ -112,7 +119,7 @@ function parseOrder(row: any) {
 export async function getProducts() {
   return withRetry(async () => {
     await ensureSchema();
-    const rows = await sql`SELECT id, name, price, description, images, image_url, stock, created_at FROM products ORDER BY created_at DESC`;
+    const rows = await sql`SELECT id, name, price, description, images, image_url, stock, category, created_at FROM products ORDER BY created_at DESC`;
     return rows.map((row: any) => parseProduct(row));
   });
 }
@@ -130,27 +137,27 @@ export async function createProduct(
   price: number,
   description: string,
   images: string[],
-  stock: number
+  stock: number,
+  category: string = 'food'
 ) {
   return withRetry(async () => {
     await ensureSchema();
     const id = String(Date.now());
     const imageList = images || [];
     const now = new Date().toISOString();
-    await sql`INSERT INTO products (id, name, price, description, images, image_url, stock, created_at) VALUES (${id}, ${name}, ${price}, ${description}, ${JSON.stringify(imageList)}, ${imageList[0] || ''}, ${stock}, ${now})`;
+    await sql`INSERT INTO products (id, name, price, description, images, image_url, stock, category, created_at) VALUES (${id}, ${name}, ${price}, ${description}, ${JSON.stringify(imageList)}, ${imageList[0] || ''}, ${stock}, ${category}, ${now})`;
 
-    // VERIFY the write actually persisted
     const verify = await sql`SELECT id FROM products WHERE id = ${id}`;
     if (verify.length === 0) {
       throw new Error(`Product write verification failed for id=${id}`);
     }
 
-    console.log(`[DB] Product created & verified: id=${id}, name=${name}`);
+    console.log(`[DB] Product created & verified: id=${id}, name=${name}, category=${category}`);
     return {
       id, name, price, description,
       images: imageList,
       image_url: imageList[0] || '',
-      stock,
+      stock, category,
       created_at: now,
     };
   });
@@ -162,7 +169,8 @@ export async function updateProduct(
   price: number,
   description: string,
   images: string[],
-  stock: number
+  stock: number,
+  category?: string
 ) {
   return withRetry(async () => {
     await ensureSchema();
@@ -171,13 +179,14 @@ export async function updateProduct(
     if (!existing) return null;
 
     const newImages = images && images.length > 0 ? images : (typeof existing.images === 'string' ? JSON.parse(existing.images || '[]') : (existing.images || []));
-    await sql`UPDATE products SET name = ${name}, price = ${price}, description = ${description}, images = ${JSON.stringify(newImages)}, image_url = ${newImages[0] || ''}, stock = ${stock} WHERE id = ${id}`;
+    const newCategory = category || existing.category || 'food';
+    await sql`UPDATE products SET name = ${name}, price = ${price}, description = ${description}, images = ${JSON.stringify(newImages)}, image_url = ${newImages[0] || ''}, stock = ${stock}, category = ${newCategory} WHERE id = ${id}`;
 
     return {
       id, name, price, description,
       images: newImages,
       image_url: newImages[0] || '',
-      stock,
+      stock, category: newCategory,
       created_at: existing.created_at,
     };
   });

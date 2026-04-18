@@ -18,6 +18,7 @@ interface Product {
   image_url?: string;
   images?: string[];
   stock: number;
+  category?: string;
   created_at?: string;
 }
 
@@ -46,6 +47,7 @@ function AdminDashboardContent() {
     price: '',
     description: '',
     stock: '100',
+    category: 'food',
   });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -158,6 +160,7 @@ function AdminDashboardContent() {
         description: formData.description,
         images: allImages,
         stock: parseInt(formData.stock),
+        category: formData.category,
       };
 
       if (editingId) {
@@ -204,6 +207,7 @@ function AdminDashboardContent() {
       price: product.price.toString(),
       description: product.description,
       stock: product.stock.toString(),
+      category: product.category || 'food',
     });
     setExistingImages(product.images || (product.image_url ? [product.image_url] : []));
     setImageFiles([]);
@@ -238,6 +242,7 @@ function AdminDashboardContent() {
       price: '',
       description: '',
       stock: '100',
+      category: 'food',
     });
     setImageFiles([]);
     setImagePreviews([]);
@@ -363,6 +368,23 @@ function AdminDashboardContent() {
                       }
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Category *
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="food">Food</option>
+                    <option value="accessories">Accessories</option>
+                    <option value="dress">Dress</option>
+                    <option value="cosmetics">Cosmetics</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
 
                 <div>
@@ -522,6 +544,11 @@ function AdminDashboardContent() {
                 <h3 className="font-semibold text-foreground mb-1">
                   {product.name}
                 </h3>
+                {product.category && (
+                  <span className="inline-block text-[10px] uppercase tracking-wide font-semibold text-primary bg-orange-50 px-2 py-0.5 rounded-full mb-2">
+                    {product.category}
+                  </span>
+                )}
                 <p className="text-sm text-muted-foreground mb-2">
                   {product.description.substring(0, 60)}...
                 </p>
