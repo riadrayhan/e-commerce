@@ -219,20 +219,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-orange-50 via-white to-orange-50 border-b border-orange-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
-          <div className="text-center max-w-2xl mx-auto">
-            <h1 className="text-3xl sm:text-5xl font-bold text-foreground mb-3">
-              Fresh Picks, <span className="text-primary">Delivered Daily</span>
-            </h1>
-            <p className="text-muted-foreground text-base sm:text-lg">
-              Food, fashion & essentials at your fingertips.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* Products */}
       <section className="bg-white py-10 sm:py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
